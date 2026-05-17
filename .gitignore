@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.env
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+
+# Data outputs and large files
+data/raw_storage/*
+data/processed/*
+data/stems/*
+data/midi/*
+data/exports/*
+data/maestro/*
+
+# Keep folder structure
+!data/raw_storage/.gitkeep
+!data/processed/.gitkeep
+!data/stems/.gitkeep
+!data/midi/.gitkeep
+!data/exports/.gitkeep
+!data/maestro/.gitkeep
+
+# Audio / MIDI / archives
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.mid
+*.midi
+*.zip
+*.tar
+*.tar.gz
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
