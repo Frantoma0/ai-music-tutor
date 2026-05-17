@@ -1,11 +1,9 @@
-version: "3.8"
-
 services:
   ollama:
     image: ollama/ollama:0.20.6
     container_name: amt-ollama
     ports:
-      - "11434:11434"
+      - "11435:11434"
     volumes:
       - ollama_models:/root/.ollama
       - ./backend/models:/models

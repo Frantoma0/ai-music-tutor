@@ -1,6 +1,6 @@
 # Core Framework
 fastapi==0.135.3
-uvicorn[standard]==0.34.0
+uvicorn[standard]>=0.35,<0.36
 pydantic==2.13.4
 
 # MCP
@@ -12,8 +12,13 @@ ollama==0.5.1
 # ML: Source Separation
 demucs==4.0.1
 
-# ML: Transcription
-basic-pitch==0.6.1
+# ML: Transcription dependencies for Basic Pitch ONNX backend
+onnxruntime==1.22.0
+pretty-midi==0.2.10
+resampy==0.4.3
+scipy==1.13.1
+scikit-learn==1.5.2
+typing-extensions>=4.15.0,<5.0
 
 # Music Theory
 music21==9.9.1
@@ -32,7 +37,7 @@ mir-eval==0.8.2
 aiosqlite==0.20.0
 
 # WebSocket
-websockets==14.1
+websockets>=15.0.1,<16.0
 
 # Testing
 pytest==8.3.4
@@ -41,5 +46,5 @@ httpx==0.28.1
 
 # Utilities
 python-multipart==0.0.20
-python-dotenv==1.0.1
+python-dotenv>=1.1.0,<2.0.0
 loguru==0.7.3
