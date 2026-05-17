@@ -1,0 +1,45 @@
+# Core Framework
+fastapi==0.135.3
+uvicorn[standard]==0.34.0
+pydantic==2.13.4
+
+# MCP
+fastmcp==3.2.3
+
+# LLM Client
+ollama==0.5.1
+
+# ML: Source Separation
+demucs==4.0.1
+
+# ML: Transcription
+basic-pitch==0.6.1
+
+# Music Theory
+music21==9.9.1
+
+# Audio Processing
+yt-dlp==2024.12.23
+pydub==0.25.1
+librosa==0.10.2.post1
+soundfile==0.13.1
+numpy==1.26.4
+
+# Evaluation
+mir-eval==0.8.2
+
+# Database
+aiosqlite==0.20.0
+
+# WebSocket
+websockets==14.1
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+httpx==0.28.1
+
+# Utilities
+python-multipart==0.0.20
+python-dotenv==1.0.1
+loguru==0.7.3
