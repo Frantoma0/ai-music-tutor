@@ -3,6 +3,9 @@ from datetime import datetime, timezone
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.tools import router as tools_router
+from app.api.ws import router as ws_router
+
 
 app = FastAPI(
     title="AI Music Tutor API",
@@ -21,6 +24,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+app.include_router(tools_router)
+app.include_router(ws_router)
 
 @app.get("/health")
 def health() -> dict:

@@ -35,11 +35,14 @@ services:
     volumes:
       - ./data:/app/data
       - ./backend/app:/app/app
+      - ./backend/tests:/app/tests
+      - ./backend/pytest.ini:/app/pytest.ini
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=qwen3-amt
       - DATABASE_URL=sqlite:///app/data/amt.db
       - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
       - LOG_LEVEL=INFO
       - OTEL_TRACES_EXPORTER=console
       - OTEL_SERVICE_NAME=amt-backend
