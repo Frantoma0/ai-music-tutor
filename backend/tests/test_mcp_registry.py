@@ -1,8 +1,8 @@
 from app.mcp_tools.registry import registry
 
 
-def test_registry_has_nine_tools() -> None:
-    assert registry.count() == 9
+def test_registry_has_ten_tools() -> None:
+    assert registry.count() == 10
 
 
 def test_registry_tool_names_are_stable() -> None:
@@ -15,6 +15,7 @@ def test_registry_tool_names_are_stable() -> None:
         "correct_midi",
         "validate_corrections",
         "prepare_lesson",
+        "run_tracer_bullet",
         "separate_lass",
     ]
 
