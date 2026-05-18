@@ -22,7 +22,7 @@ def _create_placeholder_midi(output_path: Path) -> Path:
     midi = pretty_midi.PrettyMIDI()
     piano = pretty_midi.Instrument(program=0, name="Tracer Piano")
 
-    # C major triad: C4, E4, G4
+    # C major triad: C4, E4, G4, C5
     notes = [
         (60, 0.0, 0.8),
         (64, 0.8, 1.6),
@@ -46,42 +46,54 @@ def _create_placeholder_midi(output_path: Path) -> Path:
     return output_path
 
 
-def _try_basic_pitch(audio_path: Path, job_dir: Path) -> Optional[Path]:
+def _try_basic_pitch(audio_path: Path, job_dir: Path) -> tuple[Optional[Path], Optional[str]]:
     """
     Try to run Basic Pitch.
 
-    If the installed package cannot run inference because an optional backend is
-    missing, return None and let the tracer fall back to placeholder MIDI.
+    Basic Pitch refuses to overwrite existing output files, so each run writes
+    into a clean raw subdirectory and then normalizes the selected MIDI artifact
+    to job_dir/output.mid.
     """
     try:
+        from basic_pitch import ICASSP_2022_MODEL_PATH
         from basic_pitch.inference import predict_and_save
+
+        raw_dir = job_dir / "basic_pitch_raw"
+
+        if raw_dir.exists():
+            shutil.rmtree(raw_dir)
+
+        raw_dir.mkdir(parents=True, exist_ok=True)
 
         predict_and_save(
             [str(audio_path)],
-            str(job_dir),
+            str(raw_dir),
             save_midi=True,
             sonify_midi=False,
             save_model_outputs=False,
             save_notes=False,
+            model_or_model_path=ICASSP_2022_MODEL_PATH,
         )
 
         midi_candidates = sorted(
-            list(job_dir.glob("*.mid")) + list(job_dir.glob("*.midi"))
+            list(raw_dir.glob("*.mid")) + list(raw_dir.glob("*.midi"))
         )
 
         if not midi_candidates:
-            return None
+            return None, "Basic Pitch finished but did not create a MIDI file."
 
         generated_midi = midi_candidates[0]
         normalized_midi = job_dir / "output.mid"
 
-        if generated_midi != normalized_midi:
-            shutil.copyfile(generated_midi, normalized_midi)
+        if normalized_midi.exists():
+            normalized_midi.unlink()
 
-        return normalized_midi
+        shutil.copyfile(generated_midi, normalized_midi)
 
-    except Exception:
-        return None
+        return normalized_midi, None
+
+    except Exception as exc:
+        return None, f"{type(exc).__name__}: {exc}"
 
 
 def detect_key_from_midi(midi_path: Path) -> tuple[str, Optional[float]]:
@@ -122,9 +134,11 @@ def run_tracer_bullet(
 
     midi_path = job_dir / "output.mid"
     transcription_method = "placeholder_midi"
+    transcription_error = None
 
     if use_basic_pitch:
-        generated_midi = _try_basic_pitch(audio_path, job_dir)
+        generated_midi, transcription_error = _try_basic_pitch(audio_path, job_dir)
+
         if generated_midi is not None:
             midi_path = generated_midi
             transcription_method = "basic_pitch"
@@ -145,6 +159,7 @@ def run_tracer_bullet(
         status="completed",
         transcription_method=transcription_method,
         key_confidence=key_confidence,
+        transcription_error=transcription_error,
     )
 
     result_path = job_dir / "result.json"

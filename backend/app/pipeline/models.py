@@ -14,6 +14,7 @@ class TracerBulletResult:
     status: str
     transcription_method: str
     key_confidence: Optional[float] = None
+    transcription_error: Optional[str] = None
     error: Optional[str] = None
 
     def to_dict(self) -> dict:

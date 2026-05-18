@@ -104,6 +104,7 @@ class RunTracerBulletTool(MCPTool):
                     "status": {"type": "string"},
                     "transcription_method": {"type": "string"},
                     "key_confidence": {"type": ["number", "null"]},
+                    "transcription_error": {"type": ["string", "null"]},
                     "error": {"type": ["string", "null"]},
                 },
                 "required": [
