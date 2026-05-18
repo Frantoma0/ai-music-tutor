@@ -35,7 +35,8 @@ def test_tracer_bullet_creates_midi_and_detects_key(tmp_path):
     assert result.status == "completed"
     assert result.input_audio.endswith("demo.wav")
     assert result.midi_path.endswith("output.mid")
-    assert result.hvs_score == 0.0
+    assert 0.0 <= result.hvs_score <= 1.0
+    assert result.hvs_score > 0.0
     assert result.transcription_method == "placeholder_midi"
     assert result.transcription_error is None
     assert "major" in result.detected_key.lower()

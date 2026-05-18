@@ -9,6 +9,7 @@ from typing import Optional
 import pretty_midi
 from music21 import converter
 
+from app.pipeline.hvs import compute_hvs_score_from_midi
 from app.pipeline.models import TracerBulletResult
 
 
@@ -149,13 +150,14 @@ def run_tracer_bullet(
         _create_placeholder_midi(midi_path)
 
     detected_key, key_confidence = detect_key_from_midi(midi_path)
+    hvs_score = compute_hvs_score_from_midi(midi_path, detected_key)
 
     result = TracerBulletResult(
         job_id=job_id,
         input_audio=str(audio_path),
         midi_path=str(midi_path),
         detected_key=detected_key,
-        hvs_score=0.0,
+        hvs_score=hvs_score,
         status="completed",
         transcription_method=transcription_method,
         key_confidence=key_confidence,
