@@ -3,7 +3,105 @@ from typing import Any
 from app.mcp_tools.base import MCPTool
 from app.mcp_tools.schemas import ToolCategory, ToolContract, ToolResult, ToolStatus
 from app.pipeline.audio_ingestion import extract_audio
+from app.pipeline.source_separation import separate_sources
 from app.pipeline.tracer import run_tracer_bullet
+
+
+class SeparateSourcesTool(MCPTool):
+    def __init__(self) -> None:
+        self._contract = ToolContract(
+            name="separate_sources",
+            description=(
+                "Separate a normalized WAV file into Demucs stems and select "
+                "the most suitable piano/instrumental stem."
+            ),
+            category=ToolCategory.AUDIO,
+            status=ToolStatus.READY,
+            deterministic=False,
+            uses_gpu=True,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "wav_path": {
+                        "type": "string",
+                        "description": "Path to a normalized WAV file inside the backend container.",
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Directory where stem artifacts should be written.",
+                        "default": "data/stems",
+                    },
+                    "job_id": {
+                        "type": ["string", "null"],
+                        "description": "Optional stable job id for separation artifacts.",
+                    },
+                    "model_name": {
+                        "type": "string",
+                        "description": "Demucs model name.",
+                        "default": "htdemucs",
+                    },
+                    "selected_stem": {
+                        "type": "string",
+                        "description": "Stem to use as piano/instrumental candidate.",
+                        "default": "other",
+                    },
+                },
+                "required": ["wav_path"],
+            },
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string"},
+                    "input_wav": {"type": "string"},
+                    "output_dir": {"type": "string"},
+                    "model_name": {"type": "string"},
+                    "stems": {"type": "object"},
+                    "selected_stem": {"type": "string"},
+                    "selected_stem_path": {"type": ["string", "null"]},
+                    "status": {"type": "string"},
+                    "error": {"type": ["string", "null"]},
+                },
+                "required": [
+                    "job_id",
+                    "input_wav",
+                    "output_dir",
+                    "model_name",
+                    "stems",
+                    "selected_stem",
+                    "status",
+                ],
+            },
+        )
+
+    @property
+    def contract(self) -> ToolContract:
+        return self._contract
+
+    async def execute(self, payload: dict[str, Any]) -> ToolResult:
+        wav_path = payload.get("wav_path")
+
+        if not wav_path:
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="error",
+                data={},
+                error="Missing required field: wav_path",
+            )
+
+        result = separate_sources(
+            wav_path=wav_path,
+            output_dir=payload.get("output_dir", "data/stems"),
+            job_id=payload.get("job_id"),
+            model_name=payload.get("model_name", "htdemucs"),
+            selected_stem=payload.get("selected_stem", "other"),
+        )
+
+        return ToolResult(
+            tool_name=self.contract.name,
+            status="success" if result.status == "completed" else "error",
+            data=result.to_dict(),
+            error=result.error,
+        )
 
 
 class ExtractAudioTool(MCPTool):
@@ -240,7 +338,7 @@ class RunTracerBulletTool(MCPTool):
 def build_default_tools() -> list[MCPTool]:
     return [
         ExtractAudioTool(),
-        StubTool("separate_sources", "Separate audio sources using Demucs.", ToolCategory.AUDIO, uses_gpu=True),
+        SeparateSourcesTool(),
         StubTool("transcribe_audio", "Transcribe piano audio to MIDI/note events using Basic Pitch ONNX backend.", ToolCategory.TRANSCRIPTION),
         StubTool("analyze_harmony", "Analyze key, harmonic context and chord-level information using music21.", ToolCategory.MUSIC_THEORY, deterministic=True),
         StubTool("generate_mask", "Generate confidence and harmony weighted correction mask.", ToolCategory.CORRECTION, deterministic=True),
