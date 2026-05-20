@@ -11,6 +11,7 @@ from music21 import converter
 
 from app.pipeline.hvs import compute_hvs_score_from_midi
 from app.pipeline.models import TracerBulletResult
+from app.pipeline.transcription import transcribe_audio
 
 
 def _create_placeholder_midi(output_path: Path) -> Path:
@@ -133,21 +134,38 @@ def run_tracer_bullet(
     job_dir = Path(artifacts_dir) / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
 
-    midi_path = job_dir / "output.mid"
-    transcription_method = "placeholder_midi"
-    transcription_error = None
+    transcription_result = transcribe_audio(
+        audio_path=audio_path,
+        output_dir=artifacts_dir,
+        job_id=job_id,
+        use_basic_pitch=use_basic_pitch,
+    )
 
-    if use_basic_pitch:
-        generated_midi, transcription_error = _try_basic_pitch(audio_path, job_dir)
+    if transcription_result.status != "completed" or transcription_result.midi_path is None:
+        result = TracerBulletResult(
+            job_id=job_id,
+            input_audio=str(audio_path),
+            midi_path=transcription_result.midi_path or "",
+            detected_key="unknown",
+            hvs_score=0.0,
+            status="error",
+            transcription_method=transcription_result.transcription_method,
+            key_confidence=None,
+            transcription_error=transcription_result.transcription_error,
+            error=transcription_result.error,
+        )
 
-        if generated_midi is not None:
-            midi_path = generated_midi
-            transcription_method = "basic_pitch"
-        else:
-            _create_placeholder_midi(midi_path)
-            transcription_method = "placeholder_midi_after_basic_pitch_fallback"
-    else:
-        _create_placeholder_midi(midi_path)
+        result_path = job_dir / "result.json"
+        result_path.write_text(
+            json.dumps(result.to_dict(), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        return result
+
+    midi_path = Path(transcription_result.midi_path)
+    transcription_method = transcription_result.transcription_method
+    transcription_error = transcription_result.transcription_error
 
     detected_key, key_confidence = detect_key_from_midi(midi_path)
     hvs_score = compute_hvs_score_from_midi(midi_path, detected_key)
