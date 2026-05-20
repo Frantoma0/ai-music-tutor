@@ -55,8 +55,32 @@ def _analyze_separation_quality_safely(
         return {
             "status": "error",
             "error": f"{type(exc).__name__}: {exc}",
-            "reason": "Separation quality analysis failed, but the main pipeline can continue.",
+            "decision": "use_selected_stem",
+            "recommended_audio_path": separation_result.selected_stem_path,
+            "reason": "Separation quality analysis failed, so the pipeline falls back to the selected stem.",
         }
+
+
+def _choose_transcription_audio_path(
+    separation_result: SourceSeparationResult,
+    separation_quality_data: dict[str, Any],
+) -> str:
+    """
+    Choose which audio file should be transcribed.
+
+    If separation quality says the input is likely solo piano, use the original
+    normalized WAV. Otherwise, use the selected Demucs stem.
+    """
+    decision = separation_quality_data.get("decision")
+    recommended_audio_path = separation_quality_data.get("recommended_audio_path")
+
+    if decision == "prefer_original_wav" and recommended_audio_path:
+        return str(recommended_audio_path)
+
+    if separation_result.selected_stem_path is None:
+        raise ValueError("Source separation completed but selected_stem_path is missing.")
+
+    return separation_result.selected_stem_path
 
 
 def run_audio_to_analysis_pipeline(
@@ -69,18 +93,15 @@ def run_audio_to_analysis_pipeline(
     selected_stem: str = "other",
 ) -> AudioToAnalysisPipelineResult:
     """
-    Day 5/6 orchestrator:
+    Day 6 orchestrator:
 
     source audio
     -> T1 extract_audio
     -> T2 separate_sources
-    -> Day 6 separation quality metadata
-    -> T3 tracer analysis on selected stem
+    -> separation quality analysis
+    -> adaptive transcription audio selection
+    -> T3 tracer analysis
     -> final JSON-compatible result
-
-    Note:
-    Separation quality is currently metadata only. It does not yet change
-    which audio path is passed to Basic Pitch.
     """
     job_id = job_id or uuid.uuid4().hex[:12]
     source_str = str(source)
@@ -144,24 +165,13 @@ def run_audio_to_analysis_pipeline(
             separation_result=separation_result,
         )
 
-        if separation_result.selected_stem_path is None:
-            return AudioToAnalysisPipelineResult(
-                job_id=job_id,
-                source=source_str,
-                status="error",
-                extract=extract_data,
-                separation=separation_data,
-                separation_quality=separation_quality_data,
-                analysis=empty_analysis,
-                final_audio_path=None,
-                midi_path=None,
-                detected_key=None,
-                hvs_score=None,
-                error="Source separation completed but selected_stem_path is missing.",
-            )
+        transcription_audio_path = _choose_transcription_audio_path(
+            separation_result=separation_result,
+            separation_quality_data=separation_quality_data,
+        )
 
         tracer_result: TracerBulletResult = run_tracer_bullet(
-            audio_path=separation_result.selected_stem_path,
+            audio_path=transcription_audio_path,
             artifacts_dir=artifacts_dir,
             job_id=job_id,
             use_basic_pitch=use_basic_pitch,
@@ -178,7 +188,7 @@ def run_audio_to_analysis_pipeline(
                 separation=separation_data,
                 separation_quality=separation_quality_data,
                 analysis=analysis_data,
-                final_audio_path=separation_result.selected_stem_path,
+                final_audio_path=transcription_audio_path,
                 midi_path=tracer_result.midi_path,
                 detected_key=tracer_result.detected_key,
                 hvs_score=tracer_result.hvs_score,
@@ -193,7 +203,7 @@ def run_audio_to_analysis_pipeline(
             separation=separation_data,
             separation_quality=separation_quality_data,
             analysis=analysis_data,
-            final_audio_path=separation_result.selected_stem_path,
+            final_audio_path=transcription_audio_path,
             midi_path=tracer_result.midi_path,
             detected_key=tracer_result.detected_key,
             hvs_score=tracer_result.hvs_score,
