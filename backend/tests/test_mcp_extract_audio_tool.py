@@ -66,3 +66,51 @@ def test_extract_audio_tool_via_api(tmp_path):
     assert data["sample_rate"] == 44100
     assert data["channels"] == 1
     assert data["wav_path"].endswith("input.wav")
+
+
+def test_extract_audio_tool_returns_error_when_source_is_missing():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/tools/extract_audio/execute",
+        json={"payload": {}},
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["tool_name"] == "extract_audio"
+    assert body["status"] == "error"
+    assert body["data"] == {}
+    assert body["error"] == "Missing required field: source"
+
+
+def test_extract_audio_tool_returns_error_for_missing_file(tmp_path):
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/tools/extract_audio/execute",
+        json={
+            "payload": {
+                "source": str(tmp_path / "missing.wav"),
+                "output_dir": str(tmp_path / "processed"),
+                "job_id": "api-missing-file",
+            }
+        },
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["tool_name"] == "extract_audio"
+    assert body["status"] == "error"
+    assert body["error"] is not None
+    assert "FileNotFoundError" in body["error"]
+
+    data = body["data"]
+
+    assert data["job_id"] == "api-missing-file"
+    assert data["status"] == "error"
+    assert data["input_type"] == "file"
