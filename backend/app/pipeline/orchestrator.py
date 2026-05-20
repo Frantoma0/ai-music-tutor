@@ -6,8 +6,9 @@ from pathlib import Path
 from typing import Any
 
 from app.pipeline.audio_ingestion import AudioExtractionResult, extract_audio
-from app.pipeline.source_separation import SourceSeparationResult, separate_sources
 from app.pipeline.models import TracerBulletResult
+from app.pipeline.separation_quality import analyze_separation_quality
+from app.pipeline.source_separation import SourceSeparationResult, separate_sources
 from app.pipeline.tracer import run_tracer_bullet
 
 
@@ -18,6 +19,7 @@ class AudioToAnalysisPipelineResult:
     status: str
     extract: dict[str, Any]
     separation: dict[str, Any]
+    separation_quality: dict[str, Any]
     analysis: dict[str, Any]
     final_audio_path: str | None
     midi_path: str | None
@@ -27,6 +29,34 @@ class AudioToAnalysisPipelineResult:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+def _empty_quality() -> dict[str, Any]:
+    return {}
+
+
+def _analyze_separation_quality_safely(
+    extract_result: AudioExtractionResult,
+    separation_result: SourceSeparationResult,
+) -> dict[str, Any]:
+    try:
+        quality = analyze_separation_quality(
+            input_wav=extract_result.wav_path,
+            stems=separation_result.stems,
+            selected_stem=separation_result.selected_stem,
+        )
+
+        return {
+            "status": "completed",
+            **quality.to_dict(),
+        }
+
+    except Exception as exc:
+        return {
+            "status": "error",
+            "error": f"{type(exc).__name__}: {exc}",
+            "reason": "Separation quality analysis failed, but the main pipeline can continue.",
+        }
 
 
 def run_audio_to_analysis_pipeline(
@@ -39,13 +69,18 @@ def run_audio_to_analysis_pipeline(
     selected_stem: str = "other",
 ) -> AudioToAnalysisPipelineResult:
     """
-    Day 5 orchestrator:
+    Day 5/6 orchestrator:
 
     source audio
     -> T1 extract_audio
     -> T2 separate_sources
+    -> Day 6 separation quality metadata
     -> T3 tracer analysis on selected stem
     -> final JSON-compatible result
+
+    Note:
+    Separation quality is currently metadata only. It does not yet change
+    which audio path is passed to Basic Pitch.
     """
     job_id = job_id or uuid.uuid4().hex[:12]
     source_str = str(source)
@@ -70,6 +105,7 @@ def run_audio_to_analysis_pipeline(
                 status="error",
                 extract=extract_data,
                 separation=empty_separation,
+                separation_quality=_empty_quality(),
                 analysis=empty_analysis,
                 final_audio_path=None,
                 midi_path=None,
@@ -94,6 +130,7 @@ def run_audio_to_analysis_pipeline(
                 status="error",
                 extract=extract_data,
                 separation=separation_data,
+                separation_quality=_empty_quality(),
                 analysis=empty_analysis,
                 final_audio_path=None,
                 midi_path=None,
@@ -102,6 +139,11 @@ def run_audio_to_analysis_pipeline(
                 error=separation_result.error,
             )
 
+        separation_quality_data = _analyze_separation_quality_safely(
+            extract_result=extract_result,
+            separation_result=separation_result,
+        )
+
         if separation_result.selected_stem_path is None:
             return AudioToAnalysisPipelineResult(
                 job_id=job_id,
@@ -109,6 +151,7 @@ def run_audio_to_analysis_pipeline(
                 status="error",
                 extract=extract_data,
                 separation=separation_data,
+                separation_quality=separation_quality_data,
                 analysis=empty_analysis,
                 final_audio_path=None,
                 midi_path=None,
@@ -133,6 +176,7 @@ def run_audio_to_analysis_pipeline(
                 status="error",
                 extract=extract_data,
                 separation=separation_data,
+                separation_quality=separation_quality_data,
                 analysis=analysis_data,
                 final_audio_path=separation_result.selected_stem_path,
                 midi_path=tracer_result.midi_path,
@@ -147,6 +191,7 @@ def run_audio_to_analysis_pipeline(
             status="completed",
             extract=extract_data,
             separation=separation_data,
+            separation_quality=separation_quality_data,
             analysis=analysis_data,
             final_audio_path=separation_result.selected_stem_path,
             midi_path=tracer_result.midi_path,
@@ -162,6 +207,7 @@ def run_audio_to_analysis_pipeline(
             status="error",
             extract=empty_extract,
             separation=empty_separation,
+            separation_quality=_empty_quality(),
             analysis=empty_analysis,
             final_audio_path=None,
             midi_path=None,

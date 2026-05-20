@@ -54,6 +54,11 @@ def test_run_audio_to_analysis_tool_via_api(monkeypatch):
                 "selected_stem": selected_stem,
                 "selected_stem_path": "data/stems/fake/other.wav",
             },
+            separation_quality={
+                "status": "completed",
+                "decision": "use_selected_stem",
+                "likely_solo_piano": False,
+            },
             analysis={
                 "status": "completed",
                 "midi_path": "artifacts/tracer/fake/output.mid",

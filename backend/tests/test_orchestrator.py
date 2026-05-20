@@ -82,6 +82,7 @@ def test_audio_to_analysis_pipeline_success(monkeypatch):
     assert result.error is None
     assert result.extract["status"] == "completed"
     assert result.separation["status"] == "completed"
+    assert "status" in result.separation_quality
     assert result.analysis["status"] == "completed"
 
 
@@ -111,6 +112,7 @@ def test_audio_to_analysis_pipeline_stops_on_extract_error(monkeypatch):
     assert result.error == "FileNotFoundError: missing input"
     assert result.extract["status"] == "error"
     assert result.separation == {}
+    assert result.separation_quality == {}
     assert result.analysis == {}
     assert result.midi_path is None
 
@@ -161,5 +163,6 @@ def test_audio_to_analysis_pipeline_stops_on_separation_error(monkeypatch):
     assert result.error == "RuntimeError: demucs failed"
     assert result.extract["status"] == "completed"
     assert result.separation["status"] == "error"
+    assert result.separation_quality == {}
     assert result.analysis == {}
     assert result.midi_path is None
