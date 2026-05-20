@@ -2,7 +2,92 @@ from typing import Any
 
 from app.mcp_tools.base import MCPTool
 from app.mcp_tools.schemas import ToolCategory, ToolContract, ToolResult, ToolStatus
+from app.pipeline.audio_ingestion import extract_audio
 from app.pipeline.tracer import run_tracer_bullet
+
+
+class ExtractAudioTool(MCPTool):
+    def __init__(self) -> None:
+        self._contract = ToolContract(
+            name="extract_audio",
+            description=(
+                "Extract or normalize audio from a local file or URL into a "
+                "16-bit 44.1kHz mono WAV file ready for transcription."
+            ),
+            category=ToolCategory.INGESTION,
+            status=ToolStatus.READY,
+            deterministic=True,
+            uses_gpu=False,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "source": {
+                        "type": "string",
+                        "description": "Local file path or HTTP/HTTPS URL.",
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Directory where processed audio should be written.",
+                        "default": "data/processed",
+                    },
+                    "job_id": {
+                        "type": ["string", "null"],
+                        "description": "Optional stable job id for the extraction artifacts.",
+                    },
+                },
+                "required": ["source"],
+            },
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string"},
+                    "source": {"type": "string"},
+                    "input_type": {"type": "string"},
+                    "original_path": {"type": "string"},
+                    "wav_path": {"type": "string"},
+                    "duration_seconds": {"type": ["number", "null"]},
+                    "sample_rate": {"type": ["integer", "null"]},
+                    "channels": {"type": ["integer", "null"]},
+                    "status": {"type": "string"},
+                    "error": {"type": ["string", "null"]},
+                },
+                "required": [
+                    "job_id",
+                    "source",
+                    "input_type",
+                    "wav_path",
+                    "status",
+                ],
+            },
+        )
+
+    @property
+    def contract(self) -> ToolContract:
+        return self._contract
+
+    async def execute(self, payload: dict[str, Any]) -> ToolResult:
+        source = payload.get("source")
+
+        if not source:
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="error",
+                data={},
+                error="Missing required field: source",
+            )
+
+        result = extract_audio(
+            source=source,
+            output_dir=payload.get("output_dir", "data/processed"),
+            job_id=payload.get("job_id"),
+        )
+
+        return ToolResult(
+            tool_name=self.contract.name,
+            status="success" if result.status == "completed" else "error",
+            data=result.to_dict(),
+            error=result.error,
+        )
 
 
 class StubTool(MCPTool):
@@ -154,7 +239,7 @@ class RunTracerBulletTool(MCPTool):
 
 def build_default_tools() -> list[MCPTool]:
     return [
-        StubTool("extract_audio", "Extract or normalize audio from uploaded file or YouTube source.", ToolCategory.INGESTION, deterministic=True),
+        ExtractAudioTool(),
         StubTool("separate_sources", "Separate audio sources using Demucs.", ToolCategory.AUDIO, uses_gpu=True),
         StubTool("transcribe_audio", "Transcribe piano audio to MIDI/note events using Basic Pitch ONNX backend.", ToolCategory.TRANSCRIPTION),
         StubTool("analyze_harmony", "Analyze key, harmonic context and chord-level information using music21.", ToolCategory.MUSIC_THEORY, deterministic=True),
