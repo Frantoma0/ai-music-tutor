@@ -4,8 +4,99 @@ from app.mcp_tools.base import MCPTool
 from app.mcp_tools.schemas import ToolCategory, ToolContract, ToolResult, ToolStatus
 from app.pipeline.audio_ingestion import extract_audio
 from app.pipeline.source_separation import separate_sources
+from app.pipeline.transcription import transcribe_audio
 from app.pipeline.orchestrator import run_audio_to_analysis_pipeline
 from app.pipeline.tracer import run_tracer_bullet
+
+
+class TranscribeAudioTool(MCPTool):
+    def __init__(self) -> None:
+        self._contract = ToolContract(
+            name="transcribe_audio",
+            description=(
+                "Transcribe an audio file into MIDI and structured note events "
+                "using Basic Pitch with placeholder fallback."
+            ),
+            category=ToolCategory.TRANSCRIPTION,
+            status=ToolStatus.READY,
+            deterministic=False,
+            uses_gpu=False,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "audio_path": {
+                        "type": "string",
+                        "description": "Path to the audio file inside the backend container.",
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Directory where MIDI transcription artifacts should be written.",
+                        "default": "artifacts/transcription",
+                    },
+                    "job_id": {
+                        "type": ["string", "null"],
+                        "description": "Optional stable job id for transcription artifacts.",
+                    },
+                    "use_basic_pitch": {
+                        "type": "boolean",
+                        "description": "Use real Basic Pitch transcription when true.",
+                        "default": True,
+                    },
+                },
+                "required": ["audio_path"],
+            },
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string"},
+                    "input_audio": {"type": "string"},
+                    "midi_path": {"type": ["string", "null"]},
+                    "status": {"type": "string"},
+                    "transcription_method": {"type": "string"},
+                    "note_count": {"type": "integer"},
+                    "notes": {"type": "array"},
+                    "transcription_error": {"type": ["string", "null"]},
+                    "error": {"type": ["string", "null"]},
+                },
+                "required": [
+                    "job_id",
+                    "input_audio",
+                    "status",
+                    "transcription_method",
+                    "note_count",
+                    "notes",
+                ],
+            },
+        )
+
+    @property
+    def contract(self) -> ToolContract:
+        return self._contract
+
+    async def execute(self, payload: dict[str, Any]) -> ToolResult:
+        audio_path = payload.get("audio_path")
+
+        if not audio_path:
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="error",
+                data={},
+                error="Missing required field: audio_path",
+            )
+
+        result = transcribe_audio(
+            audio_path=audio_path,
+            output_dir=payload.get("output_dir", "artifacts/transcription"),
+            job_id=payload.get("job_id"),
+            use_basic_pitch=bool(payload.get("use_basic_pitch", True)),
+        )
+
+        return ToolResult(
+            tool_name=self.contract.name,
+            status="success" if result.status == "completed" else "error",
+            data=result.to_dict(),
+            error=result.error,
+        )
 
 
 class SeparateSourcesTool(MCPTool):
@@ -453,7 +544,7 @@ def build_default_tools() -> list[MCPTool]:
     return [
         ExtractAudioTool(),
         SeparateSourcesTool(),
-        StubTool("transcribe_audio", "Transcribe piano audio to MIDI/note events using Basic Pitch ONNX backend.", ToolCategory.TRANSCRIPTION),
+        TranscribeAudioTool(),
         StubTool("analyze_harmony", "Analyze key, harmonic context and chord-level information using music21.", ToolCategory.MUSIC_THEORY, deterministic=True),
         StubTool("generate_mask", "Generate confidence and harmony weighted correction mask.", ToolCategory.CORRECTION, deterministic=True),
         StubTool("correct_midi", "Ask the local LLM to propose constrained MIDI corrections.", ToolCategory.CORRECTION, uses_gpu=True),
