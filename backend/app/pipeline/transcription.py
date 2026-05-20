@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 import uuid
 from dataclasses import asdict, dataclass
@@ -124,6 +125,27 @@ def _try_basic_pitch(audio_path: Path, raw_output_dir: Path, normalized_midi_pat
         return None, f"{type(exc).__name__}: {exc}"
 
 
+
+def _write_transcription_artifacts(
+    result: TranscriptionResult,
+    job_dir: Path,
+) -> None:
+    job_dir.mkdir(parents=True, exist_ok=True)
+
+    result_path = job_dir / "result.json"
+    notes_path = job_dir / "notes.json"
+
+    result_path.write_text(
+        json.dumps(result.to_dict(), indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    notes_path.write_text(
+        json.dumps(result.notes, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
 def transcribe_audio(
     audio_path: str | Path,
     output_dir: str | Path = "artifacts/transcription",
@@ -164,7 +186,7 @@ def transcribe_audio(
             if generated_midi is not None:
                 notes = _extract_note_events(generated_midi)
 
-                return TranscriptionResult(
+                result = TranscriptionResult(
                     job_id=job_id,
                     input_audio=str(audio_path),
                     midi_path=str(generated_midi),
@@ -176,6 +198,10 @@ def transcribe_audio(
                     error=None,
                 )
 
+                _write_transcription_artifacts(result, job_dir)
+
+                return result
+
         _write_placeholder_midi(midi_path)
         notes = _extract_note_events(midi_path)
 
@@ -185,7 +211,7 @@ def transcribe_audio(
             else "placeholder_midi"
         )
 
-        return TranscriptionResult(
+        result = TranscriptionResult(
             job_id=job_id,
             input_audio=str(audio_path),
             midi_path=str(midi_path),
@@ -197,8 +223,12 @@ def transcribe_audio(
             error=None,
         )
 
+        _write_transcription_artifacts(result, job_dir)
+
+        return result
+
     except Exception as exc:
-        return TranscriptionResult(
+        result = TranscriptionResult(
             job_id=job_id,
             input_audio=str(audio_path),
             midi_path=None,
@@ -209,3 +239,7 @@ def transcribe_audio(
             transcription_error=None,
             error=f"{type(exc).__name__}: {exc}",
         )
+
+        _write_transcription_artifacts(result, job_dir)
+
+        return result

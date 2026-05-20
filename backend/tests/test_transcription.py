@@ -157,3 +157,64 @@ def test_transcription_result_is_json_serializable(tmp_path):
     encoded = json.dumps(result.to_dict())
 
     assert "placeholder_midi" in encoded
+
+
+def test_transcribe_audio_writes_result_and_notes_json(tmp_path):
+    import json
+    from pathlib import Path
+
+    audio_path = tmp_path / "source.wav"
+    _write_demo_wav(audio_path)
+
+    result = transcribe_audio(
+        audio_path=audio_path,
+        output_dir=tmp_path / "transcription",
+        job_id="pytest-artifacts",
+        use_basic_pitch=False,
+    )
+
+    job_dir = Path(tmp_path / "transcription" / "pytest-artifacts")
+    result_path = job_dir / "result.json"
+    notes_path = job_dir / "notes.json"
+
+    assert result.status == "completed"
+    assert result_path.exists()
+    assert notes_path.exists()
+
+    result_data = json.loads(result_path.read_text(encoding="utf-8"))
+    notes_data = json.loads(notes_path.read_text(encoding="utf-8"))
+
+    assert result_data["job_id"] == "pytest-artifacts"
+    assert result_data["midi_path"].endswith("output.mid")
+    assert result_data["note_count"] == 1
+
+    assert isinstance(notes_data, list)
+    assert notes_data[0]["pitch"] == 60
+    assert notes_data[0]["pitch_name"] == "C4"
+
+
+def test_transcribe_audio_writes_error_result_json(tmp_path):
+    import json
+    from pathlib import Path
+
+    result = transcribe_audio(
+        audio_path=tmp_path / "missing.wav",
+        output_dir=tmp_path / "transcription",
+        job_id="pytest-error-artifacts",
+        use_basic_pitch=False,
+    )
+
+    job_dir = Path(tmp_path / "transcription" / "pytest-error-artifacts")
+    result_path = job_dir / "result.json"
+    notes_path = job_dir / "notes.json"
+
+    assert result.status == "error"
+    assert result_path.exists()
+    assert notes_path.exists()
+
+    result_data = json.loads(result_path.read_text(encoding="utf-8"))
+    notes_data = json.loads(notes_path.read_text(encoding="utf-8"))
+
+    assert result_data["status"] == "error"
+    assert "FileNotFoundError" in result_data["error"]
+    assert notes_data == []
