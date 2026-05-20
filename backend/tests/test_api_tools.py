@@ -20,6 +20,7 @@ def test_tools_names_endpoint() -> None:
         "validate_corrections",
         "prepare_lesson",
         "run_tracer_bullet",
+        "run_audio_to_analysis",
         "separate_lass",
     ]
 
@@ -30,7 +31,7 @@ def test_tools_contracts_endpoint() -> None:
     assert response.status_code == 200
 
     data = response.json()
-    assert len(data) == 10
+    assert len(data) == 11
     assert data[-1]["name"] == "separate_lass"
     assert data[-1]["status"] == "experimental"
 

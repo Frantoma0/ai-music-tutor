@@ -1,8 +1,8 @@
 from app.mcp_tools.registry import registry
 
 
-def test_registry_has_ten_tools() -> None:
-    assert registry.count() == 10
+def test_registry_has_eleven_tools() -> None:
+    assert registry.count() == 11
 
 
 def test_registry_tool_names_are_stable() -> None:
@@ -16,6 +16,7 @@ def test_registry_tool_names_are_stable() -> None:
         "validate_corrections",
         "prepare_lesson",
         "run_tracer_bullet",
+        "run_audio_to_analysis",
         "separate_lass",
     ]
 
@@ -42,6 +43,7 @@ def test_gpu_tools_are_explicit() -> None:
         "separate_sources",
         "correct_midi",
         "prepare_lesson",
+        "run_audio_to_analysis",
         "separate_lass",
     }
 

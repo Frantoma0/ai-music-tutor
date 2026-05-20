@@ -4,6 +4,7 @@ from app.mcp_tools.base import MCPTool
 from app.mcp_tools.schemas import ToolCategory, ToolContract, ToolResult, ToolStatus
 from app.pipeline.audio_ingestion import extract_audio
 from app.pipeline.source_separation import separate_sources
+from app.pipeline.orchestrator import run_audio_to_analysis_pipeline
 from app.pipeline.tracer import run_tracer_bullet
 
 
@@ -239,6 +240,117 @@ class StubTool(MCPTool):
         )
 
 
+class RunAudioToAnalysisTool(MCPTool):
+    def __init__(self) -> None:
+        self._contract = ToolContract(
+            name="run_audio_to_analysis",
+            description=(
+                "Run the end-to-end audio analysis pipeline: extract audio, "
+                "separate sources, transcribe selected stem and return MIDI, "
+                "key detection and HVS score."
+            ),
+            category=ToolCategory.SYSTEM,
+            status=ToolStatus.READY,
+            deterministic=False,
+            uses_gpu=True,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "source": {
+                        "type": "string",
+                        "description": "Local file path or HTTP/HTTPS URL.",
+                    },
+                    "job_id": {
+                        "type": ["string", "null"],
+                        "description": "Optional stable job id for all pipeline artifacts.",
+                    },
+                    "processed_dir": {
+                        "type": "string",
+                        "description": "Directory for normalized audio artifacts.",
+                        "default": "data/processed",
+                    },
+                    "stems_dir": {
+                        "type": "string",
+                        "description": "Directory for source separation artifacts.",
+                        "default": "data/stems",
+                    },
+                    "artifacts_dir": {
+                        "type": "string",
+                        "description": "Directory for tracer/MIDI artifacts.",
+                        "default": "artifacts/tracer",
+                    },
+                    "use_basic_pitch": {
+                        "type": "boolean",
+                        "description": "Use real Basic Pitch transcription.",
+                        "default": True,
+                    },
+                    "selected_stem": {
+                        "type": "string",
+                        "description": "Stem to pass to the transcription stage.",
+                        "default": "other",
+                    },
+                },
+                "required": ["source"],
+            },
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string"},
+                    "source": {"type": "string"},
+                    "status": {"type": "string"},
+                    "extract": {"type": "object"},
+                    "separation": {"type": "object"},
+                    "analysis": {"type": "object"},
+                    "final_audio_path": {"type": ["string", "null"]},
+                    "midi_path": {"type": ["string", "null"]},
+                    "detected_key": {"type": ["string", "null"]},
+                    "hvs_score": {"type": ["number", "null"]},
+                    "error": {"type": ["string", "null"]},
+                },
+                "required": [
+                    "job_id",
+                    "source",
+                    "status",
+                    "extract",
+                    "separation",
+                    "analysis",
+                ],
+            },
+        )
+
+    @property
+    def contract(self) -> ToolContract:
+        return self._contract
+
+    async def execute(self, payload: dict[str, Any]) -> ToolResult:
+        source = payload.get("source")
+
+        if not source:
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="error",
+                data={},
+                error="Missing required field: source",
+            )
+
+        result = run_audio_to_analysis_pipeline(
+            source=source,
+            job_id=payload.get("job_id"),
+            processed_dir=payload.get("processed_dir", "data/processed"),
+            stems_dir=payload.get("stems_dir", "data/stems"),
+            artifacts_dir=payload.get("artifacts_dir", "artifacts/tracer"),
+            use_basic_pitch=bool(payload.get("use_basic_pitch", True)),
+            selected_stem=payload.get("selected_stem", "other"),
+        )
+
+        return ToolResult(
+            tool_name=self.contract.name,
+            status="success" if result.status == "completed" else "error",
+            data=result.to_dict(),
+            error=result.error,
+        )
+
+
 class RunTracerBulletTool(MCPTool):
     def __init__(self) -> None:
         self._contract = ToolContract(
@@ -346,5 +458,6 @@ def build_default_tools() -> list[MCPTool]:
         StubTool("validate_corrections", "Deterministically validate proposed corrections and reject harmful edits.", ToolCategory.CORRECTION, deterministic=True),
         StubTool("prepare_lesson", "Generate a learner-friendly lesson plan from the validated MIDI.", ToolCategory.LESSON, uses_gpu=True),
         RunTracerBulletTool(),
+        RunAudioToAnalysisTool(),
         StubTool("separate_lass", "Language-queried audio source separation using AudioSep or a compatible LASS model.", ToolCategory.AUDIO, uses_gpu=True, status=ToolStatus.EXPERIMENTAL),
     ]

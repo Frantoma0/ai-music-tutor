@@ -25,7 +25,7 @@ def _write_demo_wav(path):
 
 def test_registry_contains_run_tracer_bullet_tool():
     assert "run_tracer_bullet" in registry.names()
-    assert registry.count() == 10
+    assert registry.count() == 11
 
 
 def test_run_tracer_bullet_tool_via_api(tmp_path):
