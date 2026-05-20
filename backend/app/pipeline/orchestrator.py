@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -20,6 +21,7 @@ class AudioToAnalysisPipelineResult:
     extract: dict[str, Any]
     separation: dict[str, Any]
     separation_quality: dict[str, Any]
+    transcription: dict[str, Any]
     analysis: dict[str, Any]
     final_audio_path: str | None
     midi_path: str | None
@@ -29,6 +31,44 @@ class AudioToAnalysisPipelineResult:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+
+def _empty_transcription() -> dict[str, Any]:
+    return {}
+
+
+def _load_transcription_metadata(
+    tracer_result: TracerBulletResult,
+    artifacts_dir: str | Path,
+    job_id: str,
+) -> dict[str, Any]:
+    """
+    Load transcription metadata produced by transcribe_audio() inside tracer.
+
+    The tracer now routes through the Day 7 transcription layer, which writes
+    notes.json next to output.mid. We expose that metadata in the orchestrator
+    result without running transcription a second time.
+    """
+    job_dir = Path(artifacts_dir) / job_id
+    notes_path = job_dir / "notes.json"
+
+    notes: list[dict[str, Any]] = []
+
+    if notes_path.exists():
+        notes = json.loads(notes_path.read_text(encoding="utf-8"))
+
+    return {
+        "status": "completed" if tracer_result.status == "completed" else "error",
+        "input_audio": tracer_result.input_audio,
+        "midi_path": tracer_result.midi_path,
+        "transcription_method": tracer_result.transcription_method,
+        "note_count": len(notes),
+        "notes": notes,
+        "notes_path": str(notes_path) if notes_path.exists() else None,
+        "transcription_error": tracer_result.transcription_error,
+        "error": tracer_result.error,
+    }
 
 
 def _empty_quality() -> dict[str, Any]:
@@ -108,6 +148,7 @@ def run_audio_to_analysis_pipeline(
 
     empty_extract: dict[str, Any] = {}
     empty_separation: dict[str, Any] = {}
+    empty_transcription: dict[str, Any] = {}
     empty_analysis: dict[str, Any] = {}
 
     try:
@@ -127,6 +168,7 @@ def run_audio_to_analysis_pipeline(
                 extract=extract_data,
                 separation=empty_separation,
                 separation_quality=_empty_quality(),
+                transcription=empty_transcription,
                 analysis=empty_analysis,
                 final_audio_path=None,
                 midi_path=None,
@@ -152,6 +194,7 @@ def run_audio_to_analysis_pipeline(
                 extract=extract_data,
                 separation=separation_data,
                 separation_quality=_empty_quality(),
+                transcription=empty_transcription,
                 analysis=empty_analysis,
                 final_audio_path=None,
                 midi_path=None,
@@ -177,6 +220,12 @@ def run_audio_to_analysis_pipeline(
             use_basic_pitch=use_basic_pitch,
         )
 
+        transcription_data = _load_transcription_metadata(
+            tracer_result=tracer_result,
+            artifacts_dir=artifacts_dir,
+            job_id=job_id,
+        )
+
         analysis_data = tracer_result.to_dict()
 
         if tracer_result.status != "completed":
@@ -187,6 +236,7 @@ def run_audio_to_analysis_pipeline(
                 extract=extract_data,
                 separation=separation_data,
                 separation_quality=separation_quality_data,
+                transcription=transcription_data,
                 analysis=analysis_data,
                 final_audio_path=transcription_audio_path,
                 midi_path=tracer_result.midi_path,
@@ -202,6 +252,7 @@ def run_audio_to_analysis_pipeline(
             extract=extract_data,
             separation=separation_data,
             separation_quality=separation_quality_data,
+            transcription=transcription_data,
             analysis=analysis_data,
             final_audio_path=transcription_audio_path,
             midi_path=tracer_result.midi_path,
@@ -218,6 +269,7 @@ def run_audio_to_analysis_pipeline(
             extract=empty_extract,
             separation=empty_separation,
             separation_quality=_empty_quality(),
+            transcription=_empty_transcription(),
             analysis=empty_analysis,
             final_audio_path=None,
             midi_path=None,

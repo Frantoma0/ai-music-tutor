@@ -83,6 +83,7 @@ def test_audio_to_analysis_pipeline_success(monkeypatch):
     assert result.extract["status"] == "completed"
     assert result.separation["status"] == "completed"
     assert "status" in result.separation_quality
+    assert "status" in result.transcription
     assert result.analysis["status"] == "completed"
 
 
@@ -113,6 +114,7 @@ def test_audio_to_analysis_pipeline_stops_on_extract_error(monkeypatch):
     assert result.extract["status"] == "error"
     assert result.separation == {}
     assert result.separation_quality == {}
+    assert result.transcription == {}
     assert result.analysis == {}
     assert result.midi_path is None
 
@@ -164,6 +166,7 @@ def test_audio_to_analysis_pipeline_stops_on_separation_error(monkeypatch):
     assert result.extract["status"] == "completed"
     assert result.separation["status"] == "error"
     assert result.separation_quality == {}
+    assert result.transcription == {}
     assert result.analysis == {}
     assert result.midi_path is None
 
@@ -264,5 +267,6 @@ def test_audio_to_analysis_pipeline_uses_original_wav_when_quality_prefers_it(mo
     assert result.status == "completed"
     assert result.final_audio_path == "data/processed/fake-job/input.wav"
     assert result.analysis["input_audio"] == "data/processed/fake-job/input.wav"
+    assert result.transcription["input_audio"] == "data/processed/fake-job/input.wav"
     assert result.separation_quality["decision"] == "prefer_original_wav"
     assert result.separation_quality["likely_solo_piano"] is True
