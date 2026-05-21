@@ -218,3 +218,30 @@ def test_transcribe_audio_writes_error_result_json(tmp_path):
     assert result_data["status"] == "error"
     assert "FileNotFoundError" in result_data["error"]
     assert notes_data == []
+
+
+def test_transcribe_audio_mirrors_output_to_data_midi(tmp_path, monkeypatch):
+    import json
+    from pathlib import Path
+
+    monkeypatch.chdir(tmp_path)
+
+    audio_path = tmp_path / "source.wav"
+    _write_demo_wav(audio_path)
+
+    result = transcribe_audio(
+        audio_path=audio_path,
+        output_dir=tmp_path / "transcription",
+        job_id="pytest-data-midi",
+        use_basic_pitch=False,
+    )
+
+    mirror_dir = Path("data/midi/pytest-data-midi")
+
+    assert result.status == "completed"
+    assert (mirror_dir / "output.mid").exists()
+    assert (mirror_dir / "notes.json").exists()
+    assert (mirror_dir / "result.json").exists()
+
+    notes = json.loads((mirror_dir / "notes.json").read_text(encoding="utf-8"))
+    assert notes[0]["pitch_name"] == "C4"

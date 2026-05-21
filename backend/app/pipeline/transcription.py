@@ -126,6 +126,36 @@ def _try_basic_pitch(audio_path: Path, raw_output_dir: Path, normalized_midi_pat
 
 
 
+
+def _mirror_transcription_to_data_midi(
+    result: TranscriptionResult,
+    job_id: str,
+) -> None:
+    """
+    Compatibility mirror for roadmap wording:
+    save raw MIDI and note list JSON under data/midi/{job_id}/.
+
+    Primary artifacts remain in the configured output_dir.
+    """
+    mirror_dir = Path("data/midi") / job_id
+    mirror_dir.mkdir(parents=True, exist_ok=True)
+
+    if result.midi_path is not None:
+        source_midi = Path(result.midi_path)
+        if source_midi.exists():
+            shutil.copyfile(source_midi, mirror_dir / "output.mid")
+
+    (mirror_dir / "notes.json").write_text(
+        json.dumps(result.notes, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    (mirror_dir / "result.json").write_text(
+        json.dumps(result.to_dict(), indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
 def _write_transcription_artifacts(
     result: TranscriptionResult,
     job_dir: Path,
@@ -224,6 +254,7 @@ def transcribe_audio(
         )
 
         _write_transcription_artifacts(result, job_dir)
+        _mirror_transcription_to_data_midi(result, job_id)
 
         return result
 
@@ -241,5 +272,6 @@ def transcribe_audio(
         )
 
         _write_transcription_artifacts(result, job_dir)
+        _mirror_transcription_to_data_midi(result, job_id)
 
         return result
