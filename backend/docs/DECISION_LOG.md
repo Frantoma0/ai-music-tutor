@@ -15,5 +15,6 @@
 
 ```text
 M(n) = 1 iff confidence < 0.7 AND hvs(n) > 0.6
+```
 
 Ако confidence липсва за конкретна нота, системата може да fallback-не към HVS-only masking.
