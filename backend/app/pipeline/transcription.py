@@ -45,7 +45,41 @@ def _write_placeholder_midi(midi_path: Path) -> None:
     midi.write(str(midi_path))
 
 
-def _extract_note_events(midi_path: str | Path) -> list[dict[str, Any]]:
+def _match_basic_pitch_confidence(
+    note_start: float,
+    note_end: float,
+    note_pitch: int,
+    basic_pitch_note_events: list[tuple] | None,
+) -> float | None:
+    if not basic_pitch_note_events:
+        return None
+
+    candidates = []
+
+    for event in basic_pitch_note_events:
+        if len(event) < 4:
+            continue
+
+        event_start, event_end, event_pitch, event_amplitude = event[:4]
+
+        if int(event_pitch) != int(note_pitch):
+            continue
+
+        distance = abs(float(event_start) - note_start) + abs(float(event_end) - note_end)
+        candidates.append((distance, float(event_amplitude)))
+
+    if not candidates:
+        return None
+
+    _, confidence = min(candidates, key=lambda item: item[0])
+
+    return round(confidence, 6)
+
+
+def _extract_note_events(
+    midi_path: str | Path,
+    basic_pitch_note_events: list[tuple] | None = None,
+) -> list[dict[str, Any]]:
     midi = pretty_midi.PrettyMIDI(str(midi_path))
     notes: list[dict[str, Any]] = []
 
@@ -72,7 +106,12 @@ def _extract_note_events(midi_path: str | Path) -> list[dict[str, Any]]:
                     "end": round(float(note.end), 6),
                     "duration": round(float(note.end - note.start), 6),
                     "velocity": int(note.velocity),
-                    "confidence": None,
+                    "confidence": _match_basic_pitch_confidence(
+                        note_start=float(note.start),
+                        note_end=float(note.end),
+                        note_pitch=int(note.pitch),
+                        basic_pitch_note_events=basic_pitch_note_events,
+                    ),
                 }
             )
 
@@ -81,48 +120,45 @@ def _extract_note_events(midi_path: str | Path) -> list[dict[str, Any]]:
     return notes
 
 
-def _try_basic_pitch(audio_path: Path, raw_output_dir: Path, normalized_midi_path: Path) -> tuple[Path | None, str | None]:
+def _try_basic_pitch(
+    audio_path: Path,
+    raw_output_dir: Path,
+    normalized_midi_path: Path,
+) -> tuple[Path | None, list[tuple] | None, str | None]:
     """
     Run Basic Pitch and normalize its generated MIDI path to output.mid.
 
+    Uses predict() instead of predict_and_save() so we can keep note_events,
+    including the Basic Pitch amplitude/confidence-like value per note.
+
     Returns:
-        (midi_path, None) on success
-        (None, error_message) on failure
+        (midi_path, note_events, None) on success
+        (None, None, error_message) on failure
     """
     try:
         from basic_pitch import ICASSP_2022_MODEL_PATH
-        from basic_pitch.inference import predict_and_save
+        from basic_pitch.inference import predict
 
         if raw_output_dir.exists():
             shutil.rmtree(raw_output_dir)
 
         raw_output_dir.mkdir(parents=True, exist_ok=True)
+        normalized_midi_path.parent.mkdir(parents=True, exist_ok=True)
 
-        predict_and_save(
-            [str(audio_path)],
-            str(raw_output_dir),
-            save_midi=True,
-            sonify_midi=False,
-            save_model_outputs=False,
-            save_notes=False,
+        _model_output, midi_data, note_events = predict(
+            audio_path,
             model_or_model_path=ICASSP_2022_MODEL_PATH,
         )
 
-        midi_candidates = sorted(
-            list(raw_output_dir.glob("*.mid")) + list(raw_output_dir.glob("*.midi"))
-        )
+        midi_data.write(str(normalized_midi_path))
 
-        if not midi_candidates:
-            return None, "Basic Pitch finished but did not create a MIDI file."
+        raw_midi_path = raw_output_dir / f"{audio_path.stem}_basic_pitch.mid"
+        shutil.copyfile(normalized_midi_path, raw_midi_path)
 
-        generated_midi = midi_candidates[0]
-        normalized_midi_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(generated_midi, normalized_midi_path)
-
-        return normalized_midi_path, None
+        return normalized_midi_path, note_events, None
 
     except Exception as exc:
-        return None, f"{type(exc).__name__}: {exc}"
+        return None, None, f"{type(exc).__name__}: {exc}"
 
 
 
@@ -133,7 +169,7 @@ def _mirror_transcription_to_data_midi(
 ) -> None:
     """
     Compatibility mirror for roadmap wording:
-    save raw MIDI and note list JSON under data/midi/{job_id}/.
+    save MIDI and note list JSON under data/midi/{job_id}/.
 
     Primary artifacts remain in the configured output_dir.
     """
@@ -207,14 +243,17 @@ def transcribe_audio(
         transcription_error = None
 
         if use_basic_pitch:
-            generated_midi, transcription_error = _try_basic_pitch(
+            generated_midi, basic_pitch_note_events, transcription_error = _try_basic_pitch(
                 audio_path=audio_path,
                 raw_output_dir=raw_output_dir,
                 normalized_midi_path=midi_path,
             )
 
             if generated_midi is not None:
-                notes = _extract_note_events(generated_midi)
+                notes = _extract_note_events(
+                    generated_midi,
+                    basic_pitch_note_events=basic_pitch_note_events,
+                )
 
                 result = TranscriptionResult(
                     job_id=job_id,
@@ -229,6 +268,7 @@ def transcribe_audio(
                 )
 
                 _write_transcription_artifacts(result, job_dir)
+                _mirror_transcription_to_data_midi(result, job_id)
 
                 return result
 

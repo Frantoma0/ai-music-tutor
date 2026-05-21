@@ -79,7 +79,7 @@ def test_transcribe_audio_basic_pitch_path_with_mock(tmp_path, monkeypatch):
 
     def fake_try_basic_pitch(audio_path, raw_output_dir, normalized_midi_path):
         _write_demo_midi(normalized_midi_path)
-        return normalized_midi_path, None
+        return normalized_midi_path, [(0.0, 0.5, 60, 0.91, None), (0.5, 1.0, 64, 0.87, None)], None
 
     monkeypatch.setattr(
         "app.pipeline.transcription._try_basic_pitch",
@@ -98,6 +98,8 @@ def test_transcribe_audio_basic_pitch_path_with_mock(tmp_path, monkeypatch):
     assert result.transcription_error is None
     assert result.note_count == 2
     assert [note["pitch"] for note in result.notes] == [60, 64]
+    assert result.notes[0]["confidence"] == 0.91
+    assert result.notes[1]["confidence"] == 0.87
 
 
 def test_transcribe_audio_falls_back_when_basic_pitch_fails(tmp_path, monkeypatch):
@@ -105,7 +107,7 @@ def test_transcribe_audio_falls_back_when_basic_pitch_fails(tmp_path, monkeypatc
     _write_demo_wav(audio_path)
 
     def fake_try_basic_pitch(audio_path, raw_output_dir, normalized_midi_path):
-        return None, "RuntimeError: fake basic pitch failure"
+        return None, None, "RuntimeError: fake basic pitch failure"
 
     monkeypatch.setattr(
         "app.pipeline.transcription._try_basic_pitch",
