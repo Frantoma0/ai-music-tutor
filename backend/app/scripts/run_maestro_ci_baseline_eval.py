@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 from pathlib import Path
@@ -8,9 +9,19 @@ from app.scripts.evaluate_midi_baseline import evaluate_midi_pair
 
 
 def main() -> int:
-    selection_path = Path("data/maestro/v3.0.0/selection/ci_pieces.csv")
-    midi_root = Path("data/maestro/v3.0.0/maestro-v3.0.0")
-    report_path = Path("artifacts/metrics/day9_maestro_ci_baseline_report.json")
+    parser = argparse.ArgumentParser(description="Evaluate MAESTRO CI predicted MIDI files.")
+    parser.add_argument("--selection", default="data/maestro/v3.0.0/selection/ci_pieces.csv")
+    parser.add_argument("--midi-root", default="data/maestro/v3.0.0/maestro-v3.0.0")
+    parser.add_argument("--job-prefix", default="day8-maestro-ci")
+    parser.add_argument("--output", default="artifacts/metrics/day9_maestro_ci_baseline_report.json")
+    parser.add_argument("--onset-tolerance", type=float, default=0.05)
+    parser.add_argument("--offset-ratio", type=float, default=0.2)
+
+    args = parser.parse_args()
+
+    selection_path = Path(args.selection)
+    midi_root = Path(args.midi_root)
+    report_path = Path(args.output)
 
     with selection_path.open(newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
@@ -18,7 +29,7 @@ def main() -> int:
     results = []
 
     for index, row in enumerate(rows, start=1):
-        job_id = f"day8-maestro-ci-{index:02d}-e2e"
+        job_id = f"{args.job_prefix}-{index:02d}-e2e"
 
         reference_midi = midi_root / row["midi_filename"]
         estimated_midi = Path("artifacts/tracer") / job_id / "output.mid"
@@ -54,8 +65,8 @@ def main() -> int:
         metrics = evaluate_midi_pair(
             reference_midi=reference_midi,
             estimated_midi=estimated_midi,
-            onset_tolerance=0.05,
-            offset_ratio=0.2,
+            onset_tolerance=args.onset_tolerance,
+            offset_ratio=args.offset_ratio,
         )
 
         item = {
