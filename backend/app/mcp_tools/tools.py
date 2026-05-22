@@ -8,6 +8,7 @@ from app.pipeline.transcription import transcribe_audio
 from app.pipeline.orchestrator import run_audio_to_analysis_pipeline
 from app.pipeline.persistence import persist_audio_to_analysis_result
 from app.pipeline.correction_mask import build_correction_mask
+from app.pipeline.harmony_analysis import analyze_notes_harmony, merge_hvs_into_notes
 from app.db.database import (
     get_metrics_for_run,
     get_pipeline_run,
@@ -590,6 +591,246 @@ class RunTracerBulletTool(MCPTool):
 
 
 
+
+
+
+class AnalyzeHarmonyTool(MCPTool):
+    def __init__(self) -> None:
+        self._contract = ToolContract(
+            name="analyze_harmony",
+            description="Analyze persisted transcription notes and assign per-note harmony violation scores.",
+            category=ToolCategory.MUSIC_THEORY,
+            status=ToolStatus.READY,
+            deterministic=True,
+            uses_gpu=False,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "job_id": {
+                        "type": "string",
+                        "description": "Persisted pipeline job id.",
+                    },
+                    "db_path": {
+                        "type": "string",
+                        "description": "SQLite database path.",
+                        "default": "data/app.sqlite3",
+                    },
+                    "output_path": {
+                        "type": ["string", "null"],
+                        "description": "Optional path where the full harmony analysis JSON should be written.",
+                        "default": None,
+                    },
+                    "include_notes": {
+                        "type": "boolean",
+                        "description": "Include analyzed notes in the API response. Full notes are still written to output_path when provided.",
+                        "default": False,
+                    },
+                    "max_notes": {
+                        "type": "integer",
+                        "description": "Maximum number of analyzed notes to include in the API response when include_notes is true.",
+                        "default": 50,
+                    },
+                },
+                "required": ["job_id"],
+            },
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string"},
+                    "pipeline_run_id": {"type": ["string", "null"]},
+                    "detected_key": {"type": ["string", "null"]},
+                    "global_hvs_score": {"type": ["number", "null"]},
+                    "transcription_method": {"type": ["string", "null"]},
+                    "midi_path": {"type": ["string", "null"]},
+                    "note_count": {"type": "integer"},
+                    "hvs_distribution": {"type": "object"},
+                    "label_distribution": {"type": "object"},
+                    "notes": {"type": "array"},
+                    "notes_included": {"type": "boolean"},
+                    "returned_note_count": {"type": "integer"},
+                    "output_path": {"type": ["string", "null"]},
+                    "error": {"type": ["string", "null"]},
+                },
+                "required": [
+                    "job_id",
+                    "note_count",
+                    "hvs_distribution",
+                    "label_distribution",
+                    "notes",
+                    "notes_included",
+                    "returned_note_count",
+                ],
+            },
+        )
+
+    @property
+    def contract(self) -> ToolContract:
+        return self._contract
+
+    async def execute(self, payload: dict[str, Any]) -> ToolResult:
+        job_id = payload.get("job_id")
+
+        if not job_id:
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="error",
+                data={
+                    "job_id": "",
+                    "pipeline_run_id": None,
+                    "detected_key": None,
+                    "global_hvs_score": None,
+                    "transcription_method": None,
+                    "midi_path": None,
+                    "note_count": 0,
+                    "hvs_distribution": {},
+                    "label_distribution": {},
+                    "notes": [],
+                    "notes_included": False,
+                    "returned_note_count": 0,
+                    "output_path": payload.get("output_path"),
+                    "error": "Missing required field: job_id",
+                },
+                error="Missing required field: job_id",
+            )
+
+        try:
+            run = await get_pipeline_run(
+                payload.get("db_path", "data/app.sqlite3"),
+                job_id=job_id,
+            )
+
+            if run is None:
+                message = f"Pipeline run not found: {job_id}"
+
+                return ToolResult(
+                    tool_name=self.contract.name,
+                    status="error",
+                    data={
+                        "job_id": job_id,
+                        "pipeline_run_id": None,
+                        "detected_key": None,
+                        "global_hvs_score": None,
+                        "transcription_method": None,
+                        "midi_path": None,
+                        "note_count": 0,
+                        "hvs_distribution": {},
+                        "label_distribution": {},
+                        "notes": [],
+                        "notes_included": False,
+                        "returned_note_count": 0,
+                        "output_path": payload.get("output_path"),
+                        "error": message,
+                    },
+                    error=message,
+                )
+
+            transcription = run.get("transcription") or {}
+            notes = transcription.get("notes") or []
+
+            harmony = analyze_notes_harmony(
+                notes,
+                detected_key=run.get("detected_key"),
+            )
+
+            notes_with_hvs = merge_hvs_into_notes(notes, harmony)
+
+            hvs_distribution: dict[str, int] = {}
+            label_distribution: dict[str, int] = {}
+
+            for note in notes_with_hvs:
+                hvs_key = str(note.get("hvs_score"))
+                label_key = str(note.get("hvs_label"))
+
+                hvs_distribution[hvs_key] = hvs_distribution.get(hvs_key, 0) + 1
+                label_distribution[label_key] = label_distribution.get(label_key, 0) + 1
+
+            include_notes = bool(payload.get("include_notes", False))
+
+            try:
+                max_notes = int(payload.get("max_notes", 50))
+            except (TypeError, ValueError):
+                max_notes = 50
+
+            max_notes = max(0, min(max_notes, 1000))
+
+            response_notes = notes_with_hvs[:max_notes] if include_notes else []
+
+            harmony_data = harmony.to_dict()
+            harmony_summary = {
+                **harmony_data,
+                "notes": response_notes,
+            }
+
+            full_data = {
+                "job_id": job_id,
+                "pipeline_run_id": run.get("id"),
+                "detected_key": run.get("detected_key"),
+                "global_hvs_score": run.get("hvs_score"),
+                "transcription_method": transcription.get("transcription_method"),
+                "midi_path": transcription.get("midi_path") or run.get("midi_path"),
+                "status": harmony.status,
+                "note_count": harmony.note_count,
+                "harmony": harmony_data,
+                "hvs_distribution": hvs_distribution,
+                "label_distribution": label_distribution,
+                "notes": notes_with_hvs,
+                "notes_included": True,
+                "returned_note_count": len(notes_with_hvs),
+                "output_path": payload.get("output_path"),
+                "error": harmony.error,
+            }
+
+            data = {
+                **full_data,
+                "harmony": harmony_summary,
+                "notes": response_notes,
+                "notes_included": include_notes,
+                "returned_note_count": len(response_notes),
+            }
+
+            output_path = payload.get("output_path")
+            if output_path:
+                import json
+                from pathlib import Path
+
+                path = Path(output_path)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(
+                    json.dumps(full_data, indent=2, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="success",
+                data=data,
+                error=None,
+            )
+
+        except Exception as exc:
+            message = f"{type(exc).__name__}: {exc}"
+
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="error",
+                data={
+                    "job_id": job_id,
+                    "pipeline_run_id": None,
+                    "detected_key": None,
+                    "global_hvs_score": None,
+                    "transcription_method": None,
+                    "midi_path": None,
+                    "note_count": 0,
+                    "hvs_distribution": {},
+                    "label_distribution": {},
+                    "notes": [],
+                    "notes_included": False,
+                    "returned_note_count": 0,
+                    "output_path": payload.get("output_path"),
+                    "error": message,
+                },
+                error=message,
+            )
 
 class GenerateMaskTool(MCPTool):
     def __init__(self) -> None:
@@ -1184,7 +1425,7 @@ def build_default_tools() -> list[MCPTool]:
         ExtractAudioTool(),
         SeparateSourcesTool(),
         TranscribeAudioTool(),
-        StubTool("analyze_harmony", "Analyze key, harmonic context and chord-level information using music21.", ToolCategory.MUSIC_THEORY, deterministic=True),
+        AnalyzeHarmonyTool(),
         GenerateMaskTool(),
         StubTool("correct_midi", "Ask the local LLM to propose constrained MIDI corrections.", ToolCategory.CORRECTION, uses_gpu=True),
         StubTool("validate_corrections", "Deterministically validate proposed corrections and reject harmful edits.", ToolCategory.CORRECTION, deterministic=True),
