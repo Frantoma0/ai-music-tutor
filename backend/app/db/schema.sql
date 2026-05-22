@@ -100,3 +100,72 @@ ON metrics(metric_name);
 
 CREATE INDEX IF NOT EXISTS idx_practice_results_session_id
 ON practice_results(session_id);
+
+-- Day 12 correction persistence tables
+
+CREATE TABLE IF NOT EXISTS correction_runs (
+    id TEXT PRIMARY KEY,
+    pipeline_run_id TEXT,
+    job_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    harmony_path TEXT,
+    mask_path TEXT,
+    proposals_path TEXT,
+    validation_path TEXT,
+    mask_selected_count INTEGER,
+    proposal_count INTEGER,
+    approved_count INTEGER,
+    rejected_count INTEGER,
+    midi_mutated INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (pipeline_run_id) REFERENCES pipeline_runs(id)
+);
+
+CREATE TABLE IF NOT EXISTS correction_proposals (
+    id TEXT PRIMARY KEY,
+    correction_run_id TEXT NOT NULL,
+    proposal_id TEXT NOT NULL,
+    candidate_id TEXT,
+    action TEXT NOT NULL,
+    original_pitch INTEGER,
+    proposed_pitch INTEGER,
+    original_start REAL,
+    proposed_start REAL,
+    original_end REAL,
+    proposed_end REAL,
+    confidence REAL,
+    hvs_score REAL,
+    status TEXT,
+    reason TEXT,
+    safety_notes_json TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (correction_run_id) REFERENCES correction_runs(id)
+);
+
+CREATE TABLE IF NOT EXISTS correction_validations (
+    id TEXT PRIMARY KEY,
+    correction_run_id TEXT NOT NULL,
+    proposal_id TEXT,
+    candidate_id TEXT,
+    action TEXT,
+    validation_status TEXT NOT NULL,
+    approved INTEGER NOT NULL,
+    reasons_json TEXT,
+    safety_notes_json TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (correction_run_id) REFERENCES correction_runs(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_correction_runs_pipeline_run_id
+ON correction_runs(pipeline_run_id);
+
+CREATE INDEX IF NOT EXISTS idx_correction_runs_job_id
+ON correction_runs(job_id);
+
+CREATE INDEX IF NOT EXISTS idx_correction_proposals_correction_run_id
+ON correction_proposals(correction_run_id);
+
+CREATE INDEX IF NOT EXISTS idx_correction_validations_correction_run_id
+ON correction_validations(correction_run_id);
+

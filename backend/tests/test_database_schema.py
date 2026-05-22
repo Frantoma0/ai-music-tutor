@@ -349,3 +349,184 @@ async def test_get_metrics_for_run_returns_none_for_missing_job(tmp_path):
     )
 
     assert result is None
+
+
+async def test_correction_tables_are_created(tmp_path):
+    from app.db.database import initialize_database, list_tables
+
+    db_path = tmp_path / "app.sqlite3"
+
+    await initialize_database(db_path)
+
+    tables = set(await list_tables(db_path))
+
+    assert "correction_runs" in tables
+    assert "correction_proposals" in tables
+    assert "correction_validations" in tables
+
+
+async def test_correction_tables_have_expected_foreign_keys(tmp_path):
+    import aiosqlite
+
+    from app.db.database import initialize_database
+
+    db_path = tmp_path / "app.sqlite3"
+
+    await initialize_database(db_path)
+
+    async with aiosqlite.connect(db_path) as db:
+        cursor = await db.execute("PRAGMA foreign_key_list(correction_runs)")
+        correction_run_fks = await cursor.fetchall()
+
+        cursor = await db.execute("PRAGMA foreign_key_list(correction_proposals)")
+        proposal_fks = await cursor.fetchall()
+
+        cursor = await db.execute("PRAGMA foreign_key_list(correction_validations)")
+        validation_fks = await cursor.fetchall()
+
+    assert any(row[2] == "pipeline_runs" for row in correction_run_fks)
+    assert any(row[2] == "correction_runs" for row in proposal_fks)
+    assert any(row[2] == "correction_runs" for row in validation_fks)
+
+
+async def test_correction_tables_can_store_minimal_records(tmp_path):
+    import aiosqlite
+
+    from app.db.database import create_pipeline_run, initialize_database, new_id
+
+    db_path = tmp_path / "app.sqlite3"
+
+    await initialize_database(db_path)
+
+    pipeline_run_id = await create_pipeline_run(
+        db_path,
+        job_id="pytest-correction-job",
+        status="completed",
+    )
+
+    correction_run_id = new_id("cor")
+
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("PRAGMA foreign_keys = ON;")
+
+        await db.execute(
+            """
+            INSERT INTO correction_runs (
+                id,
+                pipeline_run_id,
+                job_id,
+                status,
+                harmony_path,
+                mask_path,
+                proposals_path,
+                validation_path,
+                mask_selected_count,
+                proposal_count,
+                approved_count,
+                rejected_count,
+                midi_mutated
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                correction_run_id,
+                pipeline_run_id,
+                "pytest-correction-job",
+                "completed",
+                "artifacts/harmony/test.json",
+                "artifacts/corrections/mask.json",
+                "artifacts/corrections/proposals.json",
+                "artifacts/corrections/validation.json",
+                43,
+                43,
+                43,
+                0,
+                0,
+            ),
+        )
+
+        await db.execute(
+            """
+            INSERT INTO correction_proposals (
+                id,
+                correction_run_id,
+                proposal_id,
+                candidate_id,
+                action,
+                original_pitch,
+                proposed_pitch,
+                status,
+                reason,
+                safety_notes_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                new_id("cpr"),
+                correction_run_id,
+                "prop_0000",
+                "n87",
+                "flag_for_review",
+                47,
+                None,
+                "pending_validation",
+                "selected_mask_candidate_requires_review:low_confidence_high_hvs",
+                '["placeholder_proposal_no_midi_mutation"]',
+            ),
+        )
+
+        await db.execute(
+            """
+            INSERT INTO correction_validations (
+                id,
+                correction_run_id,
+                proposal_id,
+                candidate_id,
+                action,
+                validation_status,
+                approved,
+                reasons_json,
+                safety_notes_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                new_id("cvd"),
+                correction_run_id,
+                "prop_0000",
+                "n87",
+                "flag_for_review",
+                "approved_for_review",
+                1,
+                "[]",
+                '["safe_review_only_no_midi_mutation"]',
+            ),
+        )
+
+        await db.commit()
+
+        cursor = await db.execute(
+            """
+            SELECT
+                correction_runs.job_id,
+                correction_runs.mask_selected_count,
+                correction_runs.proposal_count,
+                correction_runs.approved_count,
+                correction_runs.rejected_count,
+                correction_runs.midi_mutated
+            FROM correction_runs
+            WHERE correction_runs.id = ?
+            """,
+            (correction_run_id,),
+        )
+
+        row = await cursor.fetchone()
+
+    assert row == (
+        "pytest-correction-job",
+        43,
+        43,
+        43,
+        0,
+        0,
+    )
