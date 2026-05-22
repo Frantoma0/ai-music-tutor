@@ -198,3 +198,57 @@ async def test_get_pipeline_run_returns_none_for_missing_job(tmp_path):
     result = await get_pipeline_run(db_path, job_id="missing-job")
 
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_database_can_store_metric_records(tmp_path):
+    db_path = tmp_path / "app.sqlite3"
+
+    await initialize_database(db_path)
+
+    session_id = await create_session(
+        db_path,
+        title="Metric test session",
+        source="metric.wav",
+    )
+
+    run_id = await create_pipeline_run(
+        db_path,
+        session_id=session_id,
+        job_id="metric-job",
+        status="completed",
+    )
+
+    from app.db.database import create_metric_record
+
+    metric_id = await create_metric_record(
+        db_path,
+        pipeline_run_id=run_id,
+        metric_name="baseline_f1",
+        metric_value=0.081379,
+        metric_json={
+            "precision": 0.088185,
+            "recall": 0.076167,
+            "f1": 0.081379,
+            "overlap": 0.808445,
+        },
+    )
+
+    async with aiosqlite.connect(db_path) as db:
+        cursor = await db.execute(
+            """
+            SELECT metric_name, metric_value, metric_json
+            FROM metrics
+            WHERE id = ?
+            """,
+            (metric_id,),
+        )
+        row = await cursor.fetchone()
+
+    assert row is not None
+    assert row[0] == "baseline_f1"
+    assert row[1] == 0.081379
+
+    stored = json.loads(row[2])
+    assert stored["f1"] == 0.081379
+    assert stored["overlap"] == 0.808445

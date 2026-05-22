@@ -267,3 +267,40 @@ async def get_pipeline_run(
     result["metadata"] = json.loads(result.get("metadata_json") or "{}")
 
     return result
+
+
+async def create_metric_record(
+    db_path: str | Path,
+    *,
+    metric_name: str,
+    metric_value: float | None = None,
+    metric_json: dict[str, Any] | None = None,
+    pipeline_run_id: str | None = None,
+    metric_id: str | None = None,
+) -> str:
+    metric_id = metric_id or new_id("met")
+
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("PRAGMA foreign_keys = ON;")
+        await db.execute(
+            """
+            INSERT INTO metrics (
+                id,
+                pipeline_run_id,
+                metric_name,
+                metric_value,
+                metric_json
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                metric_id,
+                pipeline_run_id,
+                metric_name,
+                metric_value,
+                json.dumps(metric_json or {}, ensure_ascii=False),
+            ),
+        )
+        await db.commit()
+
+    return metric_id
