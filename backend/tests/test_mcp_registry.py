@@ -45,7 +45,6 @@ def test_gpu_tools_are_explicit() -> None:
 
     assert gpu_tools == {
         "separate_sources",
-        "correct_midi",
         "prepare_lesson",
         "run_audio_to_analysis",
         "separate_lass",
