@@ -71,3 +71,26 @@ async def persist_audio_to_analysis_result(
         "pipeline_run_id": run_id,
         "transcription_id": transcription_id,
     }
+
+
+def persist_audio_to_analysis_result_sync(
+    result,
+    db_path: str | Path = "data/app.sqlite3",
+    *,
+    session_title: str | None = None,
+) -> dict[str, str]:
+    """
+    Synchronous wrapper for API/tool code paths.
+
+    The underlying database implementation is async because it uses aiosqlite,
+    but the current MCP tool execution path is synchronous.
+    """
+    import asyncio
+
+    return asyncio.run(
+        persist_audio_to_analysis_result(
+            result,
+            db_path=db_path,
+            session_title=session_title,
+        )
+    )

@@ -6,6 +6,7 @@ from app.pipeline.audio_ingestion import extract_audio
 from app.pipeline.source_separation import separate_sources
 from app.pipeline.transcription import transcribe_audio
 from app.pipeline.orchestrator import run_audio_to_analysis_pipeline
+from app.pipeline.persistence import persist_audio_to_analysis_result
 from app.pipeline.tracer import run_tracer_bullet
 
 
@@ -57,6 +58,8 @@ class TranscribeAudioTool(MCPTool):
                     "notes": {"type": "array"},
                     "transcription_error": {"type": ["string", "null"]},
                     "error": {"type": ["string", "null"]},
+                    "persistence": {"type": ["object", "null"]},
+                    "persistence_error": {"type": ["string", "null"]},
                 },
                 "required": [
                     "job_id",
@@ -380,6 +383,20 @@ class RunAudioToAnalysisTool(MCPTool):
                         "description": "Stem to pass to the transcription stage.",
                         "default": "other",
                     },
+                    "persist": {
+                        "type": "boolean",
+                        "description": "Persist the completed pipeline result to SQLite.",
+                        "default": False,
+                    },
+                    "db_path": {
+                        "type": "string",
+                        "description": "SQLite database path used when persist is true.",
+                        "default": "data/app.sqlite3",
+                    },
+                    "session_title": {
+                        "type": ["string", "null"],
+                        "description": "Optional session title used when persisting the run.",
+                    },
                 },
                 "required": ["source"],
             },
@@ -438,10 +455,31 @@ class RunAudioToAnalysisTool(MCPTool):
             selected_stem=payload.get("selected_stem", "other"),
         )
 
+        data = result.to_dict()
+        data["persistence"] = None
+        data["persistence_error"] = None
+
+        if bool(payload.get("persist", False)) and result.status == "completed":
+            try:
+                data["persistence"] = await persist_audio_to_analysis_result(
+                    result,
+                    db_path=payload.get("db_path", "data/app.sqlite3"),
+                    session_title=payload.get("session_title"),
+                )
+            except Exception as exc:
+                data["persistence_error"] = f"{type(exc).__name__}: {exc}"
+
+                return ToolResult(
+                    tool_name=self.contract.name,
+                    status="error",
+                    data=data,
+                    error=data["persistence_error"],
+                )
+
         return ToolResult(
             tool_name=self.contract.name,
             status="success" if result.status == "completed" else "error",
-            data=result.to_dict(),
+            data=data,
             error=result.error,
         )
 
