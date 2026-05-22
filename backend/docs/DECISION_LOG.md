@@ -94,3 +94,32 @@ Decision: generate_mask should prefer per-note HVS from harmony_path when availa
 
 Roadmap impact: This validates the T4 → T5 dependency: analyze_harmony must run before generate_mask for realistic correction candidate selection.
 
+
+---
+
+## 2026-05-22 | T4 to T5 API flow verified
+
+**Context:** After replacing both `analyze_harmony` and `generate_mask` stubs with real tools, the T4 → T5 flow was tested end-to-end through HTTP API calls.
+
+**Flow:**
+
+```text
+/api/tools/analyze_harmony/execute
+→ artifacts/harmony/day11_e2e_api_harmony.json
+→ /api/tools/generate_mask/execute with harmony_path
+→ artifacts/corrections/day11_e2e_api_mask.json
+
+Result for day9-maestro-ci-persisted-01-e2e:
+
+detected_key = F major
+note_count = 548
+HVS distribution:
+  0.0 stable_chord_tone = 255
+  0.3 diatonic_non_chord_tone = 246
+  0.6 chromatic_neighbor = 47
+
+selected_count = 43 / 548
+mask_ratio = 0.0785
+
+Decision: The real API-level T4 → T5 bridge is functional. Correction candidates should now be generated through analyze_harmony followed by generate_mask with harmony_path.
+
