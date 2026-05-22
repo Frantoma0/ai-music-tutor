@@ -174,3 +174,96 @@ async def create_transcription_record(
         await db.commit()
 
     return transcription_id
+
+
+async def list_pipeline_runs(
+    db_path: str | Path = DEFAULT_DB_PATH,
+    *,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
+
+        cursor = await db.execute(
+            """
+            SELECT
+                pipeline_runs.id,
+                pipeline_runs.job_id,
+                pipeline_runs.status,
+                pipeline_runs.source,
+                pipeline_runs.final_audio_path,
+                pipeline_runs.midi_path,
+                pipeline_runs.detected_key,
+                pipeline_runs.hvs_score,
+                pipeline_runs.error,
+                pipeline_runs.started_at,
+                pipeline_runs.completed_at,
+                sessions.id AS session_id,
+                sessions.title AS session_title,
+                transcriptions.transcription_method,
+                transcriptions.note_count
+            FROM pipeline_runs
+            LEFT JOIN sessions ON pipeline_runs.session_id = sessions.id
+            LEFT JOIN transcriptions ON transcriptions.pipeline_run_id = pipeline_runs.id
+            ORDER BY pipeline_runs.started_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+
+        rows = await cursor.fetchall()
+
+    return [dict(row) for row in rows]
+
+
+async def get_pipeline_run(
+    db_path: str | Path,
+    *,
+    job_id: str,
+) -> dict[str, Any] | None:
+    async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
+
+        cursor = await db.execute(
+            """
+            SELECT
+                pipeline_runs.*,
+                sessions.title AS session_title,
+                sessions.source AS session_source
+            FROM pipeline_runs
+            LEFT JOIN sessions ON pipeline_runs.session_id = sessions.id
+            WHERE pipeline_runs.job_id = ?
+            """,
+            (job_id,),
+        )
+
+        run_row = await cursor.fetchone()
+
+        if run_row is None:
+            return None
+
+        cursor = await db.execute(
+            """
+            SELECT *
+            FROM transcriptions
+            WHERE pipeline_run_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (run_row["id"],),
+        )
+
+        transcription_row = await cursor.fetchone()
+
+    result = dict(run_row)
+
+    if transcription_row is not None:
+        transcription = dict(transcription_row)
+        transcription["notes"] = json.loads(transcription.get("notes_json") or "[]")
+        result["transcription"] = transcription
+    else:
+        result["transcription"] = None
+
+    result["metadata"] = json.loads(result.get("metadata_json") or "{}")
+
+    return result

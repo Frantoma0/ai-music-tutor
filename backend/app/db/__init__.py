@@ -5,6 +5,8 @@ from app.db.database import (
     create_transcription_record,
     initialize_database,
     list_tables,
+    list_pipeline_runs,
+    get_pipeline_run,
 )
 
 __all__ = [
@@ -14,4 +16,6 @@ __all__ = [
     "create_transcription_record",
     "initialize_database",
     "list_tables",
+    "list_pipeline_runs",
+    "get_pipeline_run",
 ]
