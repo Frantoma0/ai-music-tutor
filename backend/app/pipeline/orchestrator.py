@@ -9,6 +9,7 @@ from typing import Any
 from app.pipeline.audio_ingestion import AudioExtractionResult, extract_audio
 from app.pipeline.models import TracerBulletResult
 from app.pipeline.separation_quality import analyze_separation_quality
+from app.pipeline.resource_guard import gpu_sequential_guard
 from app.pipeline.source_separation import SourceSeparationResult, separate_sources
 from app.pipeline.tracer import run_tracer_bullet
 

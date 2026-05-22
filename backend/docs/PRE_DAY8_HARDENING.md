@@ -24,3 +24,32 @@ Remaining limitation:
 These are FluidSynth-rendered WAV files from MAESTRO MIDI, not original Disklavier WAV recordings.
 Formal evaluation should still use original MAESTRO audio if storage permits.
 
+
+## H5: Explicit GPU / sequential guard
+
+Status: PASS
+
+A process-local GPU sequential guard was added:
+
+```text
+backend/app/pipeline/resource_guard.py
+
+The orchestrator now wraps GPU-heavy sections:
+
+separate_sources
+run_tracer_bullet
+
+Purpose:
+
+Prevent concurrent Demucs / Basic Pitch execution inside the same backend process.
+
+Current limitation:
+
+The guard is process-local and does not coordinate across multiple backend worker processes.
+This is acceptable for the current Docker/dev backend setup, which runs the API as a single backend process.
+
+Validation:
+
+test_resource_guard.py verifies that concurrent threads are serialized.
+The full test suite remains green.
+
