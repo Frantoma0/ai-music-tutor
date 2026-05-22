@@ -69,6 +69,8 @@ def test_generate_mask_tool_returns_candidates_with_mocked_run(monkeypatch):
                 "job_id": "pytest-mask-job",
                 "confidence_threshold": 0.7,
                 "hvs_threshold": 0.6,
+                "include_candidates": True,
+                "max_candidates": 10,
             }
         },
     )
@@ -96,3 +98,60 @@ def test_generate_mask_tool_returns_candidates_with_mocked_run(monkeypatch):
 
     assert data["candidates"][1]["selected"] is False
     assert data["candidates"][1]["reason"] == "confidence_above_threshold"
+
+
+
+def test_generate_mask_tool_omits_candidates_by_default(monkeypatch):
+    async def fake_get_pipeline_run(db_path, *, job_id):
+        return {
+            "id": "run_test",
+            "job_id": job_id,
+            "detected_key": "F major",
+            "hvs_score": 0.8,
+            "midi_path": "artifacts/tracer/pytest/output.mid",
+            "transcription": {
+                "transcription_method": "basic_pitch",
+                "midi_path": "artifacts/tracer/pytest/output.mid",
+                "notes": [
+                    {
+                        "id": "n0",
+                        "pitch": 60,
+                        "pitch_name": "C4",
+                        "start": 0.0,
+                        "end": 1.0,
+                        "confidence": 0.5,
+                    }
+                ],
+            },
+        }
+
+    monkeypatch.setattr(
+        "app.mcp_tools.tools.get_pipeline_run",
+        fake_get_pipeline_run,
+    )
+
+    response = client.post(
+        "/api/tools/generate_mask/execute",
+        json={
+            "payload": {
+                "job_id": "pytest-mask-job",
+                "confidence_threshold": 0.7,
+                "hvs_threshold": 0.6,
+            }
+        },
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["status"] == "success"
+
+    data = body["data"]
+
+    assert data["note_count"] == 1
+    assert data["selected_count"] == 1
+    assert data["candidate_count"] == 1
+    assert data["candidates_included"] is False
+    assert data["returned_candidate_count"] == 0
+    assert data["candidates"] == []

@@ -632,6 +632,16 @@ class GenerateMaskTool(MCPTool):
                         "description": "Optional path where the generated mask JSON should be written.",
                         "default": None,
                     },
+                    "include_candidates": {
+                        "type": "boolean",
+                        "description": "Include correction candidates in the API response. Full candidates are still written to output_path when provided.",
+                        "default": False,
+                    },
+                    "max_candidates": {
+                        "type": "integer",
+                        "description": "Maximum number of candidates to include in the API response when include_candidates is true.",
+                        "default": 50,
+                    },
                 },
                 "required": ["job_id"],
             },
@@ -648,6 +658,9 @@ class GenerateMaskTool(MCPTool):
                     "confidence_threshold": {"type": "number"},
                     "hvs_threshold": {"type": "number"},
                     "candidates": {"type": "array"},
+                    "candidate_count": {"type": "integer"},
+                    "candidates_included": {"type": "boolean"},
+                    "returned_candidate_count": {"type": "integer"},
                     "output_path": {"type": ["string", "null"]},
                     "error": {"type": ["string", "null"]},
                 },
@@ -730,15 +743,43 @@ class GenerateMaskTool(MCPTool):
                 allow_hvs_only_fallback=bool(payload.get("allow_hvs_only_fallback", True)),
             )
 
-            data = {
+            mask_data = mask.to_dict()
+            all_candidates = mask_data.get("candidates", [])
+
+            include_candidates = bool(payload.get("include_candidates", False))
+
+            try:
+                max_candidates = int(payload.get("max_candidates", 50))
+            except (TypeError, ValueError):
+                max_candidates = 50
+
+            max_candidates = max(0, min(max_candidates, 1000))
+
+            response_candidates = (
+                all_candidates[:max_candidates]
+                if include_candidates
+                else []
+            )
+
+            full_data = {
                 "job_id": job_id,
                 "pipeline_run_id": run.get("id"),
                 "detected_key": run.get("detected_key"),
                 "hvs_score": run.get("hvs_score"),
                 "transcription_method": transcription.get("transcription_method"),
                 "midi_path": transcription.get("midi_path") or run.get("midi_path"),
-                **mask.to_dict(),
+                **mask_data,
+                "candidate_count": len(all_candidates),
+                "candidates_included": True,
+                "returned_candidate_count": len(all_candidates),
                 "output_path": payload.get("output_path"),
+            }
+
+            data = {
+                **full_data,
+                "candidates": response_candidates,
+                "candidates_included": include_candidates,
+                "returned_candidate_count": len(response_candidates),
             }
 
             output_path = payload.get("output_path")
@@ -749,7 +790,7 @@ class GenerateMaskTool(MCPTool):
                 path = Path(output_path)
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(
-                    json.dumps(data, indent=2, ensure_ascii=False),
+                    json.dumps(full_data, indent=2, ensure_ascii=False),
                     encoding="utf-8",
                 )
 
