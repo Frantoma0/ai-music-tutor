@@ -7,6 +7,7 @@ from app.pipeline.source_separation import separate_sources
 from app.pipeline.transcription import transcribe_audio
 from app.pipeline.orchestrator import run_audio_to_analysis_pipeline
 from app.pipeline.persistence import persist_audio_to_analysis_result
+from app.pipeline.correction_mask import build_correction_mask
 from app.db.database import (
     get_metrics_for_run,
     get_pipeline_run,
@@ -588,6 +589,200 @@ class RunTracerBulletTool(MCPTool):
 
 
 
+
+
+class GenerateMaskTool(MCPTool):
+    def __init__(self) -> None:
+        self._contract = ToolContract(
+            name="generate_mask",
+            description="Generate deterministic correction mask candidates from a persisted pipeline run.",
+            category=ToolCategory.CORRECTION,
+            status=ToolStatus.READY,
+            deterministic=True,
+            uses_gpu=False,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "job_id": {
+                        "type": "string",
+                        "description": "Persisted pipeline job id.",
+                    },
+                    "db_path": {
+                        "type": "string",
+                        "description": "SQLite database path.",
+                        "default": "data/app.sqlite3",
+                    },
+                    "confidence_threshold": {
+                        "type": "number",
+                        "description": "Select notes with confidence below this threshold.",
+                        "default": 0.7,
+                    },
+                    "hvs_threshold": {
+                        "type": "number",
+                        "description": "Select notes only when HVS is above this threshold.",
+                        "default": 0.6,
+                    },
+                    "allow_hvs_only_fallback": {
+                        "type": "boolean",
+                        "description": "Allow HVS-only candidate selection when note confidence is missing.",
+                        "default": True,
+                    },
+                    "output_path": {
+                        "type": ["string", "null"],
+                        "description": "Optional path where the generated mask JSON should be written.",
+                        "default": None,
+                    },
+                },
+                "required": ["job_id"],
+            },
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string"},
+                    "pipeline_run_id": {"type": ["string", "null"]},
+                    "detected_key": {"type": ["string", "null"]},
+                    "hvs_score": {"type": ["number", "null"]},
+                    "transcription_method": {"type": ["string", "null"]},
+                    "note_count": {"type": "integer"},
+                    "selected_count": {"type": "integer"},
+                    "confidence_threshold": {"type": "number"},
+                    "hvs_threshold": {"type": "number"},
+                    "candidates": {"type": "array"},
+                    "output_path": {"type": ["string", "null"]},
+                    "error": {"type": ["string", "null"]},
+                },
+                "required": [
+                    "job_id",
+                    "note_count",
+                    "selected_count",
+                    "confidence_threshold",
+                    "hvs_threshold",
+                    "candidates",
+                ],
+            },
+        )
+
+    @property
+    def contract(self) -> ToolContract:
+        return self._contract
+
+    async def execute(self, payload: dict[str, Any]) -> ToolResult:
+        job_id = payload.get("job_id")
+
+        if not job_id:
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="error",
+                data={
+                    "job_id": "",
+                    "pipeline_run_id": None,
+                    "detected_key": None,
+                    "hvs_score": None,
+                    "transcription_method": None,
+                    "note_count": 0,
+                    "selected_count": 0,
+                    "confidence_threshold": float(payload.get("confidence_threshold", 0.7)),
+                    "hvs_threshold": float(payload.get("hvs_threshold", 0.6)),
+                    "candidates": [],
+                    "output_path": payload.get("output_path"),
+                    "error": "Missing required field: job_id",
+                },
+                error="Missing required field: job_id",
+            )
+
+        try:
+            run = await get_pipeline_run(
+                payload.get("db_path", "data/app.sqlite3"),
+                job_id=job_id,
+            )
+
+            if run is None:
+                message = f"Pipeline run not found: {job_id}"
+
+                return ToolResult(
+                    tool_name=self.contract.name,
+                    status="error",
+                    data={
+                        "job_id": job_id,
+                        "pipeline_run_id": None,
+                        "detected_key": None,
+                        "hvs_score": None,
+                        "transcription_method": None,
+                        "note_count": 0,
+                        "selected_count": 0,
+                        "confidence_threshold": float(payload.get("confidence_threshold", 0.7)),
+                        "hvs_threshold": float(payload.get("hvs_threshold", 0.6)),
+                        "candidates": [],
+                        "output_path": payload.get("output_path"),
+                        "error": message,
+                    },
+                    error=message,
+                )
+
+            transcription = run.get("transcription") or {}
+            notes = transcription.get("notes") or []
+
+            mask = build_correction_mask(
+                notes,
+                global_hvs_score=run.get("hvs_score"),
+                confidence_threshold=float(payload.get("confidence_threshold", 0.7)),
+                hvs_threshold=float(payload.get("hvs_threshold", 0.6)),
+                allow_hvs_only_fallback=bool(payload.get("allow_hvs_only_fallback", True)),
+            )
+
+            data = {
+                "job_id": job_id,
+                "pipeline_run_id": run.get("id"),
+                "detected_key": run.get("detected_key"),
+                "hvs_score": run.get("hvs_score"),
+                "transcription_method": transcription.get("transcription_method"),
+                "midi_path": transcription.get("midi_path") or run.get("midi_path"),
+                **mask.to_dict(),
+                "output_path": payload.get("output_path"),
+            }
+
+            output_path = payload.get("output_path")
+            if output_path:
+                import json
+                from pathlib import Path
+
+                path = Path(output_path)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(
+                    json.dumps(data, indent=2, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="success",
+                data=data,
+                error=None,
+            )
+
+        except Exception as exc:
+            message = f"{type(exc).__name__}: {exc}"
+
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="error",
+                data={
+                    "job_id": job_id,
+                    "pipeline_run_id": None,
+                    "detected_key": None,
+                    "hvs_score": None,
+                    "transcription_method": None,
+                    "note_count": 0,
+                    "selected_count": 0,
+                    "confidence_threshold": float(payload.get("confidence_threshold", 0.7)),
+                    "hvs_threshold": float(payload.get("hvs_threshold", 0.6)),
+                    "candidates": [],
+                    "output_path": payload.get("output_path"),
+                    "error": message,
+                },
+                error=message,
+            )
+
 class ListPipelineRunsTool(MCPTool):
     def __init__(self) -> None:
         self._contract = ToolContract(
@@ -909,7 +1104,7 @@ def build_default_tools() -> list[MCPTool]:
         SeparateSourcesTool(),
         TranscribeAudioTool(),
         StubTool("analyze_harmony", "Analyze key, harmonic context and chord-level information using music21.", ToolCategory.MUSIC_THEORY, deterministic=True),
-        StubTool("generate_mask", "Generate confidence and harmony weighted correction mask.", ToolCategory.CORRECTION, deterministic=True),
+        GenerateMaskTool(),
         StubTool("correct_midi", "Ask the local LLM to propose constrained MIDI corrections.", ToolCategory.CORRECTION, uses_gpu=True),
         StubTool("validate_corrections", "Deterministically validate proposed corrections and reject harmful edits.", ToolCategory.CORRECTION, deterministic=True),
         StubTool("prepare_lesson", "Generate a learner-friendly lesson plan from the validated MIDI.", ToolCategory.LESSON, uses_gpu=True),
