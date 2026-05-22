@@ -632,6 +632,11 @@ class GenerateMaskTool(MCPTool):
                         "description": "Optional path where the generated mask JSON should be written.",
                         "default": None,
                     },
+                    "harmony_path": {
+                        "type": ["string", "null"],
+                        "description": "Optional harmony analysis JSON path containing notes with per-note hvs_score.",
+                        "default": None,
+                    },
                     "include_candidates": {
                         "type": "boolean",
                         "description": "Include correction candidates in the API response. Full candidates are still written to output_path when provided.",
@@ -735,6 +740,39 @@ class GenerateMaskTool(MCPTool):
             transcription = run.get("transcription") or {}
             notes = transcription.get("notes") or []
 
+            harmony_path = payload.get("harmony_path")
+            harmony_source = "none"
+
+            if harmony_path:
+                import json
+                from pathlib import Path
+
+                path = Path(harmony_path)
+                harmony_data = json.loads(path.read_text(encoding="utf-8"))
+
+                harmony_notes = harmony_data.get("notes") or []
+                hvs_by_id = {
+                    note.get("id"): note
+                    for note in harmony_notes
+                    if note.get("id") is not None
+                }
+
+                merged_notes = []
+
+                for note in notes:
+                    item = dict(note)
+                    harmony_note = hvs_by_id.get(item.get("id"))
+
+                    if harmony_note is not None:
+                        item["hvs_score"] = harmony_note.get("hvs_score")
+                        item["hvs_label"] = harmony_note.get("hvs_label")
+                        item["hvs_reason"] = harmony_note.get("hvs_reason") or harmony_note.get("reason")
+
+                    merged_notes.append(item)
+
+                notes = merged_notes
+                harmony_source = str(path)
+
             mask = build_correction_mask(
                 notes,
                 global_hvs_score=run.get("hvs_score"),
@@ -768,6 +806,8 @@ class GenerateMaskTool(MCPTool):
                 "hvs_score": run.get("hvs_score"),
                 "transcription_method": transcription.get("transcription_method"),
                 "midi_path": transcription.get("midi_path") or run.get("midi_path"),
+                "harmony_path": payload.get("harmony_path"),
+                "harmony_source": harmony_source,
                 **mask_data,
                 "candidate_count": len(all_candidates),
                 "candidates_included": True,
