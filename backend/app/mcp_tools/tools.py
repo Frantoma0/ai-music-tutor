@@ -7,7 +7,12 @@ from app.pipeline.source_separation import separate_sources
 from app.pipeline.transcription import transcribe_audio
 from app.pipeline.orchestrator import run_audio_to_analysis_pipeline
 from app.pipeline.persistence import persist_audio_to_analysis_result
-from app.db.database import get_pipeline_run, list_pipeline_runs
+from app.db.database import (
+    get_metrics_for_run,
+    get_pipeline_run,
+    list_metrics,
+    list_pipeline_runs,
+)
 from app.pipeline.tracer import run_tracer_bullet
 
 
@@ -731,6 +736,173 @@ class GetPipelineRunTool(MCPTool):
                 error=f"{type(exc).__name__}: {exc}",
             )
 
+
+
+class ListMetricsTool(MCPTool):
+    def __init__(self) -> None:
+        self._contract = ToolContract(
+            name="list_metrics",
+            description="List persisted evaluation metrics from SQLite.",
+            category=ToolCategory.SYSTEM,
+            status=ToolStatus.READY,
+            deterministic=True,
+            uses_gpu=False,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "db_path": {
+                        "type": "string",
+                        "description": "SQLite database path.",
+                        "default": "data/app.sqlite3",
+                    },
+                    "metric_name": {
+                        "type": ["string", "null"],
+                        "description": "Optional metric name filter.",
+                        "default": None,
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of metrics to return.",
+                        "default": 50,
+                    },
+                },
+                "required": [],
+            },
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "metrics": {"type": "array"},
+                    "count": {"type": "integer"},
+                },
+                "required": ["metrics", "count"],
+            },
+        )
+
+    @property
+    def contract(self) -> ToolContract:
+        return self._contract
+
+    async def execute(self, payload: dict[str, Any]) -> ToolResult:
+        try:
+            metrics = await list_metrics(
+                payload.get("db_path", "data/app.sqlite3"),
+                metric_name=payload.get("metric_name"),
+                limit=int(payload.get("limit", 50)),
+            )
+
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="success",
+                data={
+                    "metrics": metrics,
+                    "count": len(metrics),
+                },
+                error=None,
+            )
+
+        except Exception as exc:
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="error",
+                data={
+                    "metrics": [],
+                    "count": 0,
+                },
+                error=f"{type(exc).__name__}: {exc}",
+            )
+
+
+class GetMetricsForRunTool(MCPTool):
+    def __init__(self) -> None:
+        self._contract = ToolContract(
+            name="get_metrics_for_run",
+            description="Get all persisted metrics for one pipeline run by job_id.",
+            category=ToolCategory.SYSTEM,
+            status=ToolStatus.READY,
+            deterministic=True,
+            uses_gpu=False,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "job_id": {
+                        "type": "string",
+                        "description": "Pipeline job id.",
+                    },
+                    "db_path": {
+                        "type": "string",
+                        "description": "SQLite database path.",
+                        "default": "data/app.sqlite3",
+                    },
+                },
+                "required": ["job_id"],
+            },
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "run": {"type": ["object", "null"]},
+                    "metrics": {"type": "array"},
+                    "count": {"type": "integer"},
+                },
+                "required": ["run", "metrics", "count"],
+            },
+        )
+
+    @property
+    def contract(self) -> ToolContract:
+        return self._contract
+
+    async def execute(self, payload: dict[str, Any]) -> ToolResult:
+        job_id = payload.get("job_id")
+
+        if not job_id:
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="error",
+                data={
+                    "run": None,
+                    "metrics": [],
+                    "count": 0,
+                },
+                error="Missing required field: job_id",
+            )
+
+        try:
+            result = await get_metrics_for_run(
+                payload.get("db_path", "data/app.sqlite3"),
+                job_id=job_id,
+            )
+
+            if result is None:
+                return ToolResult(
+                    tool_name=self.contract.name,
+                    status="error",
+                    data={
+                        "run": None,
+                        "metrics": [],
+                        "count": 0,
+                    },
+                    error=f"Pipeline run not found: {job_id}",
+                )
+
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="success",
+                data=result,
+                error=None,
+            )
+
+        except Exception as exc:
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="error",
+                data={
+                    "run": None,
+                    "metrics": [],
+                    "count": 0,
+                },
+                error=f"{type(exc).__name__}: {exc}",
+            )
+
 def build_default_tools() -> list[MCPTool]:
     return [
         ExtractAudioTool(),
@@ -745,5 +917,7 @@ def build_default_tools() -> list[MCPTool]:
         RunAudioToAnalysisTool(),
         ListPipelineRunsTool(),
         GetPipelineRunTool(),
+        ListMetricsTool(),
+        GetMetricsForRunTool(),
         StubTool("separate_lass", "Language-queried audio source separation using AudioSep or a compatible LASS model.", ToolCategory.AUDIO, uses_gpu=True, status=ToolStatus.EXPERIMENTAL),
     ]

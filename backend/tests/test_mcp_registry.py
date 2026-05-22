@@ -1,8 +1,8 @@
 from app.mcp_tools.registry import registry
 
 
-def test_registry_has_thirteen_tools() -> None:
-    assert registry.count() == 13
+def test_registry_has_fifteen_tools() -> None:
+    assert registry.count() == 15
 
 
 def test_registry_tool_names_are_stable() -> None:
@@ -19,6 +19,8 @@ def test_registry_tool_names_are_stable() -> None:
         "run_audio_to_analysis",
         "list_pipeline_runs",
         "get_pipeline_run",
+        "list_metrics",
+        "get_metrics_for_run",
         "separate_lass",
     ]
 
