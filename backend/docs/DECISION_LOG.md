@@ -54,3 +54,43 @@ For `day9-maestro-ci-persisted-01-e2e`, the bridge mask used global `hvs_score =
 
 **Impact on roadmap:** Day 11 should prioritize per-note HVS in `analyze_harmony`. Once per-note HVS is available, the project can re-evaluate whether the original `confidence < 0.7 AND hvs(n) > 0.6` formula becomes selective enough.
 
+
+---
+
+## 2026-05-22 | Per-note HVS dramatically narrows correction mask
+
+**Context:** The first bridge implementation of `generate_mask` used global `hvs_score` from the pipeline run. For `day9-maestro-ci-persisted-01-e2e`, this produced an overly broad mask:
+
+```text
+global_hvs_score = 0.8065
+confidence_threshold = 0.7
+hvs_threshold = 0.6
+selected_count = 498 / 548
+mask_ratio = 0.9088
+
+Change: Day 11 added per-note harmony analysis via harmony_analysis.py and allowed generate_mask to consume a harmony_path artifact containing per-note hvs_score.
+
+Per-note HVS distribution for day9-maestro-ci-persisted-01-e2e:
+
+HVS score	Label	Count
+0.0	stable_chord_tone	255
+0.3	diatonic_non_chord_tone	246
+0.6	chromatic_neighbor	47
+
+The correction mask was rerun with:
+
+confidence_threshold = 0.7
+hvs_threshold = 0.6
+harmony_path = artifacts/harmony/day11_ci_01_harmony_analysis.json
+
+Result:
+
+selected_count = 43 / 548
+mask_ratio = 0.0785
+
+Impact: Per-note HVS reduced correction candidates from 498 to 43, a reduction of 455 candidates, or about 91.37%.
+
+Decision: generate_mask should prefer per-note HVS from harmony_path when available. Global HVS remains useful only as a fallback bridge for runs without harmony analysis.
+
+Roadmap impact: This validates the T4 → T5 dependency: analyze_harmony must run before generate_mask for realistic correction candidate selection.
+
