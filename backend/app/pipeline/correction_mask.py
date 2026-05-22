@@ -75,7 +75,7 @@ def build_correction_mask(
     Build deterministic correction mask candidates for T5.
 
     Primary rule:
-        M(n) = 1 iff confidence < confidence_threshold AND hvs(n) > hvs_threshold
+        M(n) = 1 iff confidence < confidence_threshold AND hvs(n) >= hvs_threshold
 
     Current bridge:
         If per-note hvs_score is missing, global pipeline hvs_score is used.
@@ -93,7 +93,7 @@ def build_correction_mask(
         hvs_score = _as_float(note.get("hvs_score"))
         effective_hvs = hvs_score if hvs_score is not None else global_hvs
 
-        has_hvs_signal = effective_hvs is not None and effective_hvs > hvs_threshold
+        has_hvs_signal = effective_hvs is not None and effective_hvs >= hvs_threshold
 
         if confidence is None:
             selected = bool(allow_hvs_only_fallback and has_hvs_signal)

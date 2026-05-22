@@ -84,3 +84,26 @@ def test_correction_mask_can_use_hvs_only_fallback_when_confidence_is_missing():
     assert data["selected_count"] == 1
     assert data["candidates"][0]["selected"] is True
     assert data["candidates"][0]["reason"] == "confidence_missing_hvs_only_fallback"
+
+
+def test_correction_mask_selects_when_hvs_equals_threshold():
+    result = build_correction_mask(
+        [
+            {
+                "id": "n0",
+                "pitch": 61,
+                "pitch_name": "C#4",
+                "confidence": 0.5,
+                "hvs_score": 0.6,
+            }
+        ],
+        global_hvs_score=0.0,
+        confidence_threshold=0.7,
+        hvs_threshold=0.6,
+    )
+
+    data = result.to_dict()
+
+    assert data["selected_count"] == 1
+    assert data["candidates"][0]["selected"] is True
+    assert data["candidates"][0]["reason"] == "low_confidence_high_hvs"
