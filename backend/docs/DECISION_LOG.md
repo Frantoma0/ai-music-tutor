@@ -123,3 +123,33 @@ mask_ratio = 0.0785
 
 Decision: The real API-level T4 → T5 bridge is functional. Correction candidates should now be generated through analyze_harmony followed by generate_mask with harmony_path.
 
+
+---
+
+## 2026-05-22 | Safe correct_midi proposal mode implemented
+
+**Context:** After T4 `analyze_harmony` and T5 `generate_mask` were implemented as real API tools, T6 `correct_midi` was replaced with a safe deterministic proposal generator.
+
+**Behavior:** The tool reads a correction mask artifact and converts selected mask candidates into `flag_for_review` correction proposals.
+
+**Result for `day9-maestro-ci-persisted-01-e2e`:**
+
+```text
+source_mask_path = artifacts/corrections/day11_e2e_api_mask.json
+candidate_count = 548
+selected_candidate_count = 43
+proposal_count = 43
+midi_mutated = false
+
+Proposal safety: Each proposal keeps MIDI unchanged:
+
+action = flag_for_review
+proposed_pitch = null
+proposed_start = null
+proposed_end = null
+status = pending_validation
+
+Decision: correct_midi does not mutate MIDI yet. It only creates traceable pending proposals that must pass validation before any future MIDI edit is applied.
+
+Roadmap impact: The T5 → T6 bridge is now functional. The next required step is T7 validation of correction proposals.
+
