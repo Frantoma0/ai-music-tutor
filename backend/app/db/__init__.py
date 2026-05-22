@@ -9,7 +9,6 @@ from app.db.database import (
     list_pipeline_runs,
     get_pipeline_run,
     list_metrics,
-    persist_correction_run,
     get_metrics_for_run,
 )
 
