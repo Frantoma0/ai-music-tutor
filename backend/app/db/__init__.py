@@ -9,6 +9,7 @@ from app.db.database import (
     list_pipeline_runs,
     get_pipeline_run,
     list_metrics,
+    persist_correction_run,
     get_metrics_for_run,
 )
 
@@ -25,3 +26,10 @@ __all__ = [
     "list_metrics",
     "get_metrics_for_run",
 ]
+
+from app.db.correction_persistence import (
+    get_correction_run,
+    init_correction_schema,
+    list_correction_runs,
+    persist_correction_artifacts,
+)
