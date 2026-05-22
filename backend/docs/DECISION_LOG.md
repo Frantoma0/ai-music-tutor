@@ -153,3 +153,31 @@ Decision: correct_midi does not mutate MIDI yet. It only creates traceable pendi
 
 Roadmap impact: The T5 → T6 bridge is now functional. The next required step is T7 validation of correction proposals.
 
+
+---
+
+## 2026-05-22 | Safe T4-T7 API correction chain verified
+
+**Context:** After implementing real API tools for `analyze_harmony`, `generate_mask`, `correct_midi`, and `validate_corrections`, the correction pipeline was verified end-to-end without MIDI mutation.
+
+**Flow:**
+
+```text
+analyze_harmony
+→ generate_mask with harmony_path
+→ correct_midi safe proposal mode
+→ validate_corrections
+
+Result for day9-maestro-ci-persisted-01-e2e:
+
+note_count = 548
+mask_selected_count = 43
+proposal_count = 43
+approved_count = 43
+rejected_count = 0
+midi_mutation_allowed = false
+
+Decision: T4-T7 are now connected as a safe API-level correction chain. correct_midi currently creates flag_for_review proposals only, and validate_corrections approves them for review without allowing MIDI mutation.
+
+Roadmap impact: The project has a complete pre-mutation correction pipeline. The next step is to either implement stricter proposal validation or introduce carefully constrained MIDI mutation behind validation.
+
