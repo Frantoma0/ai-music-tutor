@@ -252,3 +252,100 @@ async def test_database_can_store_metric_records(tmp_path):
     stored = json.loads(row[2])
     assert stored["f1"] == 0.081379
     assert stored["overlap"] == 0.808445
+
+
+@pytest.mark.asyncio
+async def test_database_can_list_metrics_and_get_metrics_for_run(tmp_path):
+    db_path = tmp_path / "app.sqlite3"
+
+    await initialize_database(db_path)
+
+    session_id = await create_session(
+        db_path,
+        title="Metrics history session",
+        source="metrics-history.wav",
+    )
+
+    run_id = await create_pipeline_run(
+        db_path,
+        session_id=session_id,
+        job_id="metrics-history-job",
+        status="completed",
+        detected_key="F major",
+        hvs_score=0.8065,
+        metadata={"kind": "metrics-history-test"},
+    )
+
+    from app.db.database import (
+        create_metric_record,
+        get_metrics_for_run,
+        list_metrics,
+    )
+
+    await create_metric_record(
+        db_path,
+        pipeline_run_id=run_id,
+        metric_name="baseline_transcription_f1",
+        metric_value=0.048951,
+        metric_json={
+            "precision": 0.063869,
+            "recall": 0.039683,
+            "f1": 0.048951,
+            "overlap": 0.85949,
+        },
+    )
+
+    await create_metric_record(
+        db_path,
+        pipeline_run_id=run_id,
+        metric_name="baseline_transcription_overlap",
+        metric_value=0.85949,
+        metric_json={
+            "overlap": 0.85949,
+        },
+    )
+
+    metrics = await list_metrics(
+        db_path,
+        metric_name="baseline_transcription_f1",
+        limit=10,
+    )
+
+    assert len(metrics) == 1
+    assert metrics[0]["job_id"] == "metrics-history-job"
+    assert metrics[0]["metric_name"] == "baseline_transcription_f1"
+    assert metrics[0]["metric_value"] == 0.048951
+    assert metrics[0]["metric_json"]["f1"] == 0.048951
+
+    result = await get_metrics_for_run(
+        db_path,
+        job_id="metrics-history-job",
+    )
+
+    assert result is not None
+    assert result["run"]["job_id"] == "metrics-history-job"
+    assert result["run"]["detected_key"] == "F major"
+    assert result["run"]["metadata"]["kind"] == "metrics-history-test"
+    assert result["count"] == 2
+
+    names = {metric["metric_name"] for metric in result["metrics"]}
+    assert names == {
+        "baseline_transcription_f1",
+        "baseline_transcription_overlap",
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_for_run_returns_none_for_missing_job(tmp_path):
+    db_path = tmp_path / "app.sqlite3"
+
+    await initialize_database(db_path)
+
+    from app.db.database import get_metrics_for_run
+
+    result = await get_metrics_for_run(
+        db_path,
+        job_id="missing-metrics-job",
+    )
+
+    assert result is None

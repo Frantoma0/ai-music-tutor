@@ -8,6 +8,8 @@ from app.db.database import (
     list_tables,
     list_pipeline_runs,
     get_pipeline_run,
+    list_metrics,
+    get_metrics_for_run,
 )
 
 __all__ = [
@@ -20,4 +22,6 @@ __all__ = [
     "list_tables",
     "list_pipeline_runs",
     "get_pipeline_run",
+    "list_metrics",
+    "get_metrics_for_run",
 ]

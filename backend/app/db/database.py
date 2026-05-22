@@ -304,3 +304,105 @@ async def create_metric_record(
         await db.commit()
 
     return metric_id
+
+
+async def list_metrics(
+    db_path: str | Path = DEFAULT_DB_PATH,
+    *,
+    metric_name: str | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    limit = max(1, min(int(limit), 500))
+
+    query = """
+        SELECT
+            metrics.id,
+            metrics.pipeline_run_id,
+            metrics.metric_name,
+            metrics.metric_value,
+            metrics.metric_json,
+            metrics.created_at,
+            pipeline_runs.job_id,
+            pipeline_runs.status AS pipeline_status,
+            pipeline_runs.detected_key,
+            pipeline_runs.hvs_score
+        FROM metrics
+        LEFT JOIN pipeline_runs ON metrics.pipeline_run_id = pipeline_runs.id
+    """
+
+    params: list[Any] = []
+
+    if metric_name:
+        query += " WHERE metrics.metric_name = ?"
+        params.append(metric_name)
+
+    query += " ORDER BY metrics.created_at DESC LIMIT ?"
+    params.append(limit)
+
+    async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(query, params)
+        rows = await cursor.fetchall()
+
+    results = []
+
+    for row in rows:
+        item = dict(row)
+        item["metric_json"] = json.loads(item.get("metric_json") or "{}")
+        results.append(item)
+
+    return results
+
+
+async def get_metrics_for_run(
+    db_path: str | Path,
+    *,
+    job_id: str,
+) -> dict[str, Any] | None:
+    async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
+
+        cursor = await db.execute(
+            """
+            SELECT *
+            FROM pipeline_runs
+            WHERE job_id = ?
+            """,
+            (job_id,),
+        )
+        run_row = await cursor.fetchone()
+
+        if run_row is None:
+            return None
+
+        cursor = await db.execute(
+            """
+            SELECT
+                id,
+                pipeline_run_id,
+                metric_name,
+                metric_value,
+                metric_json,
+                created_at
+            FROM metrics
+            WHERE pipeline_run_id = ?
+            ORDER BY created_at DESC
+            """,
+            (run_row["id"],),
+        )
+        metric_rows = await cursor.fetchall()
+
+    run = dict(run_row)
+    run["metadata"] = json.loads(run.get("metadata_json") or "{}")
+
+    metrics = []
+    for row in metric_rows:
+        metric = dict(row)
+        metric["metric_json"] = json.loads(metric.get("metric_json") or "{}")
+        metrics.append(metric)
+
+    return {
+        "run": run,
+        "metrics": metrics,
+        "count": len(metrics),
+    }
