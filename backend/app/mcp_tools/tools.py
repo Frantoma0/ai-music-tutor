@@ -7,6 +7,7 @@ from app.pipeline.source_separation import separate_sources
 from app.pipeline.transcription import transcribe_audio
 from app.pipeline.orchestrator import run_audio_to_analysis_pipeline
 from app.pipeline.persistence import persist_audio_to_analysis_result
+from app.db.database import get_pipeline_run, list_pipeline_runs
 from app.pipeline.tracer import run_tracer_bullet
 
 
@@ -580,6 +581,156 @@ class RunTracerBulletTool(MCPTool):
             )
 
 
+
+
+class ListPipelineRunsTool(MCPTool):
+    def __init__(self) -> None:
+        self._contract = ToolContract(
+            name="list_pipeline_runs",
+            description="List recent persisted audio-to-analysis pipeline runs from SQLite.",
+            category=ToolCategory.SYSTEM,
+            status=ToolStatus.READY,
+            deterministic=True,
+            uses_gpu=False,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "db_path": {
+                        "type": "string",
+                        "description": "SQLite database path.",
+                        "default": "data/app.sqlite3",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of runs to return.",
+                        "default": 20,
+                    },
+                },
+                "required": [],
+            },
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "runs": {"type": "array"},
+                    "count": {"type": "integer"},
+                },
+                "required": ["runs", "count"],
+            },
+        )
+
+    @property
+    def contract(self) -> ToolContract:
+        return self._contract
+
+    async def execute(self, payload: dict[str, Any]) -> ToolResult:
+        try:
+            limit = int(payload.get("limit", 20))
+            limit = max(1, min(limit, 100))
+
+            runs = await list_pipeline_runs(
+                payload.get("db_path", "data/app.sqlite3"),
+                limit=limit,
+            )
+
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="success",
+                data={
+                    "runs": runs,
+                    "count": len(runs),
+                },
+                error=None,
+            )
+
+        except Exception as exc:
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="error",
+                data={
+                    "runs": [],
+                    "count": 0,
+                },
+                error=f"{type(exc).__name__}: {exc}",
+            )
+
+
+class GetPipelineRunTool(MCPTool):
+    def __init__(self) -> None:
+        self._contract = ToolContract(
+            name="get_pipeline_run",
+            description="Get one persisted audio-to-analysis pipeline run by job_id from SQLite.",
+            category=ToolCategory.SYSTEM,
+            status=ToolStatus.READY,
+            deterministic=True,
+            uses_gpu=False,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "job_id": {
+                        "type": "string",
+                        "description": "Pipeline job id to retrieve.",
+                    },
+                    "db_path": {
+                        "type": "string",
+                        "description": "SQLite database path.",
+                        "default": "data/app.sqlite3",
+                    },
+                },
+                "required": ["job_id"],
+            },
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "run": {"type": ["object", "null"]},
+                },
+                "required": ["run"],
+            },
+        )
+
+    @property
+    def contract(self) -> ToolContract:
+        return self._contract
+
+    async def execute(self, payload: dict[str, Any]) -> ToolResult:
+        job_id = payload.get("job_id")
+
+        if not job_id:
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="error",
+                data={"run": None},
+                error="Missing required field: job_id",
+            )
+
+        try:
+            run = await get_pipeline_run(
+                payload.get("db_path", "data/app.sqlite3"),
+                job_id=job_id,
+            )
+
+            if run is None:
+                return ToolResult(
+                    tool_name=self.contract.name,
+                    status="error",
+                    data={"run": None},
+                    error=f"Pipeline run not found: {job_id}",
+                )
+
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="success",
+                data={"run": run},
+                error=None,
+            )
+
+        except Exception as exc:
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="error",
+                data={"run": None},
+                error=f"{type(exc).__name__}: {exc}",
+            )
+
 def build_default_tools() -> list[MCPTool]:
     return [
         ExtractAudioTool(),
@@ -592,5 +743,7 @@ def build_default_tools() -> list[MCPTool]:
         StubTool("prepare_lesson", "Generate a learner-friendly lesson plan from the validated MIDI.", ToolCategory.LESSON, uses_gpu=True),
         RunTracerBulletTool(),
         RunAudioToAnalysisTool(),
+        ListPipelineRunsTool(),
+        GetPipelineRunTool(),
         StubTool("separate_lass", "Language-queried audio source separation using AudioSep or a compatible LASS model.", ToolCategory.AUDIO, uses_gpu=True, status=ToolStatus.EXPERIMENTAL),
     ]
