@@ -181,3 +181,35 @@ Decision: T4-T7 are now connected as a safe API-level correction chain. correct_
 
 Roadmap impact: The project has a complete pre-mutation correction pipeline. The next step is to either implement stricter proposal validation or introduce carefully constrained MIDI mutation behind validation.
 
+
+---
+
+## 2026-05-22 | Correction persistence, history tools, and report added
+
+**Context:** After implementing the safe T4-T7 correction chain, Day 12 added persistence and reporting for correction artifacts.
+
+**Implemented:**
+
+```text
+correction artifacts
+→ SQLite correction_runs
+→ correction_proposals
+→ correction_validations
+→ correction history API tools
+→ Markdown correction report
+
+Verified result for day9-maestro-ci-persisted-01-e2e:
+
+note_count = 548
+candidate_count = 548
+selected_count = 43
+proposal_count = 43
+approved_count = 43
+rejected_count = 0
+midi_mutation_allowed = false
+midi_mutated = false
+
+Decision: Correction runs are now traceable through both SQLite history tools and generated Markdown reports.
+
+Roadmap impact: The project now has a persistent, reviewable, non-destructive correction workflow. The next step can be constrained MIDI mutation or richer correction reporting.
+
