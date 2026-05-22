@@ -25,6 +25,8 @@ def test_tools_names_endpoint() -> None:
         "get_pipeline_run",
         "list_metrics",
         "get_metrics_for_run",
+        "list_correction_runs",
+        "get_correction_run",
         "separate_lass",
     ]
 
@@ -35,7 +37,7 @@ def test_tools_contracts_endpoint() -> None:
     assert response.status_code == 200
 
     data = response.json()
-    assert len(data) == 15
+    assert len(data) == 17
     assert data[-1]["name"] == "separate_lass"
     assert data[-1]["status"] == "experimental"
 

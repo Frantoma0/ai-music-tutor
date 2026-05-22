@@ -1,3 +1,5 @@
+from app.db import get_correction_run as db_get_correction_run
+from app.db import list_correction_runs as db_list_correction_runs
 from typing import Any
 
 from app.mcp_tools.base import MCPTool
@@ -1773,6 +1775,240 @@ class GetMetricsForRunTool(MCPTool):
                 error=f"{type(exc).__name__}: {exc}",
             )
 
+
+
+class ListCorrectionRunsTool(MCPTool):
+    def __init__(self) -> None:
+        self._contract = ToolContract(
+            name="list_correction_runs",
+            description="List persisted correction runs from SQLite.",
+            category=ToolCategory.CORRECTION,
+            status=ToolStatus.READY,
+            deterministic=True,
+            uses_gpu=False,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "db_path": {
+                        "type": "string",
+                        "description": "SQLite database path.",
+                        "default": "data/app.sqlite3",
+                    },
+                    "job_id": {
+                        "type": ["string", "null"],
+                        "description": "Optional pipeline job id filter.",
+                        "default": None,
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of correction runs to return.",
+                        "default": 50,
+                    },
+                },
+            },
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "runs": {"type": "array"},
+                    "count": {"type": "integer"},
+                    "error": {"type": ["string", "null"]},
+                },
+                "required": ["runs", "count"],
+            },
+        )
+
+    @property
+    def contract(self) -> ToolContract:
+        return self._contract
+
+    async def execute(self, payload: dict[str, Any]) -> ToolResult:
+        try:
+            try:
+                limit = int(payload.get("limit", 50))
+            except (TypeError, ValueError):
+                limit = 50
+
+            limit = max(1, min(limit, 100))
+
+            runs = await db_list_correction_runs(
+                payload.get("db_path", "data/app.sqlite3"),
+                job_id=payload.get("job_id"),
+                limit=limit,
+            )
+
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="success",
+                data={
+                    "runs": runs,
+                    "count": len(runs),
+                    "error": None,
+                },
+                error=None,
+            )
+
+        except Exception as exc:
+            message = f"{type(exc).__name__}: {exc}"
+
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="error",
+                data={
+                    "runs": [],
+                    "count": 0,
+                    "error": message,
+                },
+                error=message,
+            )
+
+
+
+class GetCorrectionRunTool(MCPTool):
+    def __init__(self) -> None:
+        self._contract = ToolContract(
+            name="get_correction_run",
+            description="Get a persisted correction run with proposals and validations from SQLite.",
+            category=ToolCategory.CORRECTION,
+            status=ToolStatus.READY,
+            deterministic=True,
+            uses_gpu=False,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "db_path": {
+                        "type": "string",
+                        "description": "SQLite database path.",
+                        "default": "data/app.sqlite3",
+                    },
+                    "correction_run_id": {
+                        "type": "string",
+                        "description": "Correction run id.",
+                    },
+                    "include_details": {
+                        "type": "boolean",
+                        "description": "Include proposals and validations in API response.",
+                        "default": True,
+                    },
+                    "max_items": {
+                        "type": "integer",
+                        "description": "Maximum proposals/validations to include when include_details is true.",
+                        "default": 50,
+                    },
+                },
+                "required": ["correction_run_id"],
+            },
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "correction_run": {"type": ["object", "null"]},
+                    "found": {"type": "boolean"},
+                    "details_included": {"type": "boolean"},
+                    "returned_proposal_count": {"type": "integer"},
+                    "returned_validation_count": {"type": "integer"},
+                    "error": {"type": ["string", "null"]},
+                },
+                "required": [
+                    "correction_run",
+                    "found",
+                    "details_included",
+                    "returned_proposal_count",
+                    "returned_validation_count",
+                ],
+            },
+        )
+
+    @property
+    def contract(self) -> ToolContract:
+        return self._contract
+
+    async def execute(self, payload: dict[str, Any]) -> ToolResult:
+        correction_run_id = payload.get("correction_run_id")
+
+        if not correction_run_id:
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="error",
+                data={
+                    "correction_run": None,
+                    "found": False,
+                    "details_included": False,
+                    "returned_proposal_count": 0,
+                    "returned_validation_count": 0,
+                    "error": "Missing required field: correction_run_id",
+                },
+                error="Missing required field: correction_run_id",
+            )
+
+        try:
+            run = await db_get_correction_run(
+                payload.get("db_path", "data/app.sqlite3"),
+                correction_run_id=correction_run_id,
+            )
+
+            if run is None:
+                return ToolResult(
+                    tool_name=self.contract.name,
+                    status="success",
+                    data={
+                        "correction_run": None,
+                        "found": False,
+                        "details_included": False,
+                        "returned_proposal_count": 0,
+                        "returned_validation_count": 0,
+                        "error": None,
+                    },
+                    error=None,
+                )
+
+            include_details = bool(payload.get("include_details", True))
+
+            try:
+                max_items = int(payload.get("max_items", 50))
+            except (TypeError, ValueError):
+                max_items = 50
+
+            max_items = max(0, min(max_items, 1000))
+
+            data_run = dict(run)
+
+            if include_details:
+                data_run["proposals"] = run.get("proposals", [])[:max_items]
+                data_run["validations"] = run.get("validations", [])[:max_items]
+            else:
+                data_run["proposals"] = []
+                data_run["validations"] = []
+
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="success",
+                data={
+                    "correction_run": data_run,
+                    "found": True,
+                    "details_included": include_details,
+                    "returned_proposal_count": len(data_run["proposals"]),
+                    "returned_validation_count": len(data_run["validations"]),
+                    "error": None,
+                },
+                error=None,
+            )
+
+        except Exception as exc:
+            message = f"{type(exc).__name__}: {exc}"
+
+            return ToolResult(
+                tool_name=self.contract.name,
+                status="error",
+                data={
+                    "correction_run": None,
+                    "found": False,
+                    "details_included": False,
+                    "returned_proposal_count": 0,
+                    "returned_validation_count": 0,
+                    "error": message,
+                },
+                error=message,
+            )
+
 def build_default_tools() -> list[MCPTool]:
     return [
         ExtractAudioTool(),
@@ -1789,5 +2025,7 @@ def build_default_tools() -> list[MCPTool]:
         GetPipelineRunTool(),
         ListMetricsTool(),
         GetMetricsForRunTool(),
+        ListCorrectionRunsTool(),
+        GetCorrectionRunTool(),
         StubTool("separate_lass", "Language-queried audio source separation using AudioSep or a compatible LASS model.", ToolCategory.AUDIO, uses_gpu=True, status=ToolStatus.EXPERIMENTAL),
     ]
