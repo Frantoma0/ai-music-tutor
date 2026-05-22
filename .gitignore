@@ -56,3 +56,11 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# MAESTRO dataset / generated data
+data/maestro/
+data/raw/
+data/processed/
+data/stems/
+data/midi/
+artifacts/
