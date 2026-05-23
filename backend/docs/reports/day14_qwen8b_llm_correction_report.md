@@ -66,3 +66,25 @@ The direct 43-candidate Qwen3 8B run with chunk size 10 failed coverage validati
 This confirms that LLM-based correction should be processed in bounded chunks, with schema validation, metadata locking, and coverage validation.
 
 The system does not trust the LLM as a source of numeric metadata. The LLM decides only the correction action and reason, while pitch, timing, confidence, and HVS values are restored from the original system candidates.
+
+
+## 7. VRAM Observation
+
+During the Qwen3 8B Q4_K_M chunked inference run, GPU usage was monitored with `nvidia-smi`.
+
+Observed hardware:
+
+| Field | Value |
+|---|---:|
+| GPU | `NVIDIA GeForce RTX 4070` |
+| Total VRAM | `8188 MiB` |
+| Observed VRAM usage | `6983 MiB / 8188 MiB` |
+| Approx. VRAM usage | `85.3%` |
+| Approx. free VRAM headroom | `1205 MiB` |
+| Observed GPU utilization | `~90–93%` |
+| Power usage | `~100W / 105W` |
+
+This confirms that `qwen3:8b` Q4_K_M fits within the available 8GB VRAM budget, but operates close to the memory limit.
+
+The practical pipeline decision is to keep GPU-heavy stages sequential rather than concurrent. In particular, source separation / transcription and Qwen3 8B correction should not be executed at the same time on the same 8GB GPU.
+

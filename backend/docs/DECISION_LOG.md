@@ -252,3 +252,31 @@ Decision: LLM correction must be chunked and coverage-validated. The LLM may dec
 
 Roadmap impact: The project now has a working LLM correction decision layer. The next safe step is constrained MIDI mutation using validated and metadata-locked corrections only.
 
+
+---
+
+## 2026-05-23 | Qwen3 8B VRAM validation on RTX 4070
+
+**Context:** After installing and validating `qwen3:8b` Q4_K_M, GPU memory usage was monitored during the 43-candidate chunked LLM correction validation run.
+
+**Observed hardware:**
+
+```text
+GPU = NVIDIA GeForce RTX 4070
+Total VRAM = 8188 MiB
+Observed VRAM usage = 6983 MiB / 8188 MiB
+Approximate VRAM usage = 85.3%
+Approximate free headroom = 1205 MiB
+Observed GPU utilization = ~90–93%
+Power usage = ~100W / 105W
+
+Decision: qwen3:8b Q4_K_M fits within the available 8GB GPU memory budget, but the margin is tight. GPU-heavy stages should remain sequential rather than concurrent.
+
+Pipeline implication:
+
+source separation / transcription
+→ release GPU-heavy workload
+→ Qwen3 8B correction
+
+Roadmap impact: Formal LLM correction experiments can proceed with qwen3:8b, using chunk_size=5 and the existing JSON extraction, CorrectionBatch validation, metadata locking, and coverage validation layers.
+
