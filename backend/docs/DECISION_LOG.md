@@ -213,3 +213,42 @@ Decision: Correction runs are now traceable through both SQLite history tools an
 
 Roadmap impact: The project now has a persistent, reviewable, non-destructive correction workflow. The next step can be constrained MIDI mutation or richer correction reporting.
 
+
+---
+
+## 2026-05-23 | Qwen3 LLM correction requires chunking, validation, and metadata locking
+
+**Context:** Day 13 introduced Qwen3/Ollama integration for LLM-assisted correction decisions over selected mask candidates.
+
+**Observed behavior:**
+
+```text
+43 candidates in one prompt
+→ failed to produce valid JSON
+
+Implemented solution:
+
+43 candidates
+→ chunks of 10
+→ Qwen3 per chunk
+→ JSON extraction
+→ CorrectionBatch schema validation
+→ metadata locking
+→ coverage validation
+
+Verified result for day9-maestro-ci-persisted-01-e2e:
+
+model = qwen3:1.7b
+candidate_count = 43
+chunk_size = 10
+chunk_count = 5
+completed_chunk_count = 5
+failed_chunk_count = 0
+locked_correction_count = 43
+coverage.ok = true
+metadata_locked = true
+
+Decision: LLM correction must be chunked and coverage-validated. The LLM may decide action and reason, but numeric metadata such as pitch, timing, confidence, and HVS score must remain system-owned.
+
+Roadmap impact: The project now has a working LLM correction decision layer. The next safe step is constrained MIDI mutation using validated and metadata-locked corrections only.
+
