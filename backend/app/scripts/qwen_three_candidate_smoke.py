@@ -9,6 +9,7 @@ import httpx
 
 from app.pipeline.llm_correction_batch import validate_correction_batch_json
 from app.pipeline.llm_json import extract_first_json_object
+from app.pipeline.llm_metadata_locking import lock_correction_batch_metadata
 
 
 def _load_selected_candidates(mask_path: str | Path, limit: int) -> list[dict[str, Any]]:
@@ -87,6 +88,10 @@ def run_qwen_three_candidate_smoke(
 
     parsed = extract_first_json_object(raw_response)
     validated = validate_correction_batch_json(parsed)
+    locked = lock_correction_batch_metadata(
+        validated,
+        candidates=candidates,
+    )
 
     result = {
         "status": "completed",
@@ -98,6 +103,7 @@ def run_qwen_three_candidate_smoke(
         "raw_response": raw_response,
         "parsed": parsed,
         "validated": validated.to_dict(),
+        "locked": locked,
         "error": None,
     }
 

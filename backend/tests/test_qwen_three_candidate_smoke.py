@@ -116,3 +116,9 @@ def test_run_qwen_three_candidate_smoke_validates_batch_and_writes_artifact(
     assert artifact["candidate_count"] == 1
     assert artifact["validated"]["correction_count"] == 1
     assert artifact["validated"]["corrections"][0]["candidate_id"] == "n87"
+
+    assert artifact["locked"]["metadata_locked"] is True
+    assert artifact["locked"]["correction_count"] == 1
+    assert artifact["locked"]["corrections"][0]["candidate_id"] == "n87"
+    assert artifact["locked"]["corrections"][0]["confidence"] == 0.629913
+    assert artifact["locked"]["corrections"][0]["metadata_source"] == "system_candidate_locked"
