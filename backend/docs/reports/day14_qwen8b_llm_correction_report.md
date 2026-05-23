@@ -1,4 +1,4 @@
-# Day 13 LLM Correction Report
+# Day 14 Qwen3 8B LLM Correction Validation Report
 
 ## 1. Summary
 
@@ -61,7 +61,7 @@
 
 ## 6. Interpretation
 
-The direct 43-candidate Qwen run failed to produce valid JSON, but chunked processing with chunk size 10 completed successfully.
+The direct 43-candidate Qwen3 8B run with chunk size 10 failed coverage validation, but chunked processing with chunk size 5 completed successfully.
 
 This confirms that LLM-based correction should be processed in bounded chunks, with schema validation, metadata locking, and coverage validation.
 
