@@ -4,96 +4,69 @@
 
 Day 15 diagnosed why the original offset-inclusive F1 score was extremely low and whether a future v4 pitch-correction prompt could realistically improve the evaluated CI piece.
 
-The main finding is that the low `0.048951` F1 score is primarily caused by offset/duration matching, not by a global pitch, octave, transposition, or segment mismatch.
+Main finding:
 
-When offset matching is disabled, the raw transcription reaches a much stronger onset+pitch F1 score:
+```text
+The low 0.048951 F1 score is primarily caused by offset/duration matching.
+Under onset+pitch evaluation, the raw transcription reaches 0.675524 F1.
+2. Baseline Alignment Diagnosis
+Metric	Value
+Raw onset+offset+pitch F1	0.048951
+Raw onset+pitch precision	0.881387
+Raw onset+pitch recall	0.547619
+Raw onset+pitch F1	0.675524
 
-| Metric | Value |
-|---|---:|
-| Raw onset+offset+pitch F1 | `0.048951` |
-| Raw onset+pitch F1 | `0.675524` |
-| Raw onset+pitch precision | `0.881387` |
-| Raw onset+pitch recall | `0.547619` |
+The diagnostic harness reproduced the raw production F1:
 
----
+Field	Value
+Expected F1	0.048951
+Measured F1	0.048951
+Status	MATCH
+3. Offset/Duration Finding
+Evaluation mode	F1
+With offset matching	0.048951
+Without offset matching	0.675524
 
-## 2. Baseline Reproduction Gate
+The estimated MIDI has much longer note durations than the MAESTRO reference:
 
-The raw baseline diagnosis reproduced the previously reported production F1.
-
-| Field | Value |
-|---|---:|
-| Expected F1 | `0.048951` |
-| Measured F1 | `0.048951` |
-| Difference | `0.00000005` |
-| Status | `MATCH` |
-
-This validates the diagnostic harness for the raw MIDI.
-
----
-
-## 3. Offset/Duration Finding
-
-The decisive diagnostic result is the offset comparison:
-
-| Evaluation mode | F1 |
-|---|---:|
-| With offset matching | `0.048951` |
-| Without offset matching | `0.675524` |
-
-The estimated MIDI has substantially longer note durations than the MAESTRO reference MIDI:
-
-| Statistic | Reference | Estimate |
-|---|---:|---:|
-| Note count | `882` | `548` |
-| Median duration | `0.045573` | `0.186364` |
-| Span seconds | `65.09` | `67.61` |
-| Pitch range | `31-89` | `31-89` |
+Statistic	Reference	Estimate
+Note count	882	548
+Median duration	0.045573s	0.186364s
+Pitch range	31–89	31–89
+Span	65.09s	67.61s
 
 Interpretation:
 
-```text
-The low offset-inclusive F1 is primarily caused by duration/offset mismatch.
-The raw transcription is much stronger under onset+pitch evaluation than the offset-inclusive score suggests.
+The transcription is not globally wrong. The low score is mainly caused by offset-inclusive evaluation penalizing longer estimated note durations.
 4. Excluded Hypotheses
+Hypothesis	Result
+Octave mismatch	Not supported
+Global transposition	Not supported
+Segment mismatch	Not supported
+Main bottleneck	Offset/duration matching
 
-The diagnostics do not support octave, transposition, or segment mismatch as the primary cause.
+Best global pitch shift:
 
-Check	Result
-Best global pitch shift	0 semitones
-Best global shift F1	0.048951
-Chroma F1	0.055944
-Reference first onset	0.908854
-Estimate first onset	0.918182
-
-Conclusion:
-
-The piece and segment are aligned, and there is no global octave or transposition mismatch.
+0 semitones
 5. v2 Correction Under Primary Metric
 
-Using onset+pitch F1 as the primary metric, the v2 corrected MIDI performs worse than the raw MIDI.
+Under onset+pitch F1, v2 performs worse than raw.
 
 Metric	Raw	Corrected	Delta
-Onset+pitch precision	0.881387	0.863139	-0.018248
-Onset+pitch recall	0.547619	0.536281	-0.011338
-Onset+pitch F1	0.675524	0.661538	-0.013986
+Onset+pitch F1	0.675524	0.661500	-0.014000
 
 No-worse guarantee:
 
 Field	Value
 Raw F1	0.675524
 No-worse floor	0.670524
-Corrected F1	0.661538
+Corrected F1	0.661500
 Guarantee satisfied	false
 
 Interpretation:
 
-Prompt v2 violates the no-worse guarantee under the primary onset+pitch metric.
-This confirms that v2 is useful as a mutation-loop proof, but not as a product correction policy.
+Prompt v2 is useful as mutation-loop proof, but it is not suitable as a product correction policy.
 6. Correctable Error Decomposition
-
-Task B measured how many errors are realistically correctable with a ±2 semitone pitch shift.
-
 Bucket	Count
 Already correct TP	483
 Correctable pitch error ≤ 2 semitones	0
@@ -110,23 +83,19 @@ Oracle v4 F1 ceiling	0.675524
 
 Conclusion:
 
-The correctable ±2 semitone pitch-error surface is empty for this CI piece.
-Therefore, v4 cannot improve F1 on this piece using only small pitch shifts.
+For this CI piece, there are no correctable ±2 semitone pitch errors. Therefore, prompt v4 cannot improve F1 on this piece using only small pitch shifts.
 7. Selected Candidate Overlap
 
-The 43 HVS+confidence selected candidates do not overlap with correctable pitch errors.
+The 43 HVS+confidence selected candidates do not target the correctable error surface.
 
 Selected candidate bucket	Count
-| `already_correct_tp` | `36` |
-| `spurious_or_timing_fp` | `7` |
+Already correct TP	36
+Spurious or timing FP	7
+Correctable pitch error ≤ 2 semitones	0
 
 Interpretation:
 
-Of the 43 selected candidates, 36 are already true positives and 7 are spurious/timing false positives.
-None are correctable ±2 semitone pitch errors.
-
-This shows that the current HVS+confidence mask selects suspicious notes, but not the actual correctable pitch-error surface.
-
+The current HVS+confidence mask selects suspicious notes, but not actual correctable ±2 semitone pitch errors.
 8. Canonical Day 15 Decision
 
 The next step should not be prompt v4 for this CI piece.
