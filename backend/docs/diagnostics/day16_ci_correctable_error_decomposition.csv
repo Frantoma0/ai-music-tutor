@@ -1,0 +1,6 @@
+piece_index,job_id,composer,title,status,reference_note_count,estimated_note_count,already_correct_tp_count,correctable_pitch_error_le_2_count,uncorrectable_pitch_error_gt_2_count,spurious_or_timing_fp_count,undetected_fn_count,baseline_f1,oracle_optimal_v4_gain,oracle_optimal_v4_f1,error
+1,day9-maestro-ci-persisted-01-e2e,Domenico Scarlatti,Sonata K. 525,completed,882,548,483,0,33,32,366,0.6755244755244755,0.0,0.6755244755244755,
+2,day9-maestro-ci-persisted-02-e2e,Domenico Scarlatti,"Sonata in D Minor, K. 9 L. 413",completed,860,781,664,3,18,96,175,0.8092626447288239,0.0036563071297989035,0.8129189518586228,
+3,day9-maestro-ci-persisted-03-e2e,Sergei Rachmaninoff,Prelude Op. 32 No. 8 in A Minor,completed,1400,1120,926,0,74,120,400,0.734920634920635,0.0,0.734920634920635,
+4,day9-maestro-ci-persisted-04-e2e,Franz Schubert,Impromptu Op. 90 No. 4 in A-flat Major,completed,1110,1051,838,3,56,154,213,0.7755668671911152,0.002776492364645997,0.7783433595557612,
+5,day9-maestro-ci-persisted-05-e2e,Frédéric Chopin,Etudes Op. 10 Nos. 9,completed,1256,1189,915,3,64,207,274,0.7484662576687117,0.00245398773006135,0.750920245398773,
