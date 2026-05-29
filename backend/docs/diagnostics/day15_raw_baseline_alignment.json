@@ -1,0 +1,153 @@
+{
+  "reference": "data/maestro/v3.0.0/maestro-v3.0.0/2008/MIDI-Unprocessed_09_R3_2008_01-07_ORIG_MID--AUDIO_09_R3_2008_wav--2.midi",
+  "est": "artifacts/tracer/day9-maestro-ci-persisted-01-e2e/output.mid",
+  "baseline": {
+    "precision": 0.06386861313868614,
+    "recall": 0.03968253968253968,
+    "f1": 0.04895104895104895,
+    "overlap": 0.8594897663783426
+  },
+  "reproduction": {
+    "expected_f1": 0.048951,
+    "measured_f1": 0.04895104895104895,
+    "diff": 4.8951048950418574e-08,
+    "status": "MATCH"
+  },
+  "onset_sweep": [
+    {
+      "precision": 0.060218978102189784,
+      "recall": 0.03741496598639456,
+      "f1": 0.04615384615384616,
+      "overlap": 0.8638239741374372,
+      "onset_tolerance": 0.025
+    },
+    {
+      "precision": 0.06386861313868614,
+      "recall": 0.03968253968253968,
+      "f1": 0.04895104895104895,
+      "overlap": 0.8594897663783426,
+      "onset_tolerance": 0.05
+    },
+    {
+      "precision": 0.06386861313868614,
+      "recall": 0.03968253968253968,
+      "f1": 0.04895104895104895,
+      "overlap": 0.8594897663783426,
+      "onset_tolerance": 0.1
+    },
+    {
+      "precision": 0.16058394160583941,
+      "recall": 0.09977324263038549,
+      "f1": 0.12307692307692308,
+      "overlap": 0.49105374245191685,
+      "onset_tolerance": 0.2
+    },
+    {
+      "precision": 0.20437956204379562,
+      "recall": 0.12698412698412698,
+      "f1": 0.15664335664335663,
+      "overlap": 0.4071941217214823,
+      "onset_tolerance": 0.5
+    }
+  ],
+  "offset_comparison": {
+    "with_offset": {
+      "precision": 0.06386861313868614,
+      "recall": 0.03968253968253968,
+      "f1": 0.04895104895104895,
+      "overlap": 0.8594897663783426
+    },
+    "without_offset": {
+      "precision": 0.8813868613138686,
+      "recall": 0.5476190476190477,
+      "f1": 0.6755244755244756,
+      "overlap": 0.3117561029448997
+    }
+  },
+  "octave_sweep": [
+    {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "overlap": 0.0,
+      "semitone_shift": -24.0
+    },
+    {
+      "precision": 0.0036496350364963502,
+      "recall": 0.0022675736961451248,
+      "f1": 0.002797202797202797,
+      "overlap": 0.8005602592406134,
+      "semitone_shift": -12.0
+    },
+    {
+      "precision": 0.06386861313868614,
+      "recall": 0.03968253968253968,
+      "f1": 0.04895104895104895,
+      "overlap": 0.8594897663783426,
+      "semitone_shift": 0.0
+    },
+    {
+      "precision": 0.0036496350364963502,
+      "recall": 0.0022675736961451248,
+      "f1": 0.002797202797202797,
+      "overlap": 0.8232220464157829,
+      "semitone_shift": 12.0
+    },
+    {
+      "precision": 0.005474452554744526,
+      "recall": 0.003401360544217687,
+      "f1": 0.004195804195804196,
+      "overlap": 0.7559322730024443,
+      "semitone_shift": 24.0
+    }
+  ],
+  "best_global_shift": {
+    "precision": 0.06386861313868614,
+    "recall": 0.03968253968253968,
+    "f1": 0.04895104895104895,
+    "overlap": 0.8594897663783426,
+    "semitone_shift": 0.0
+  },
+  "chroma": {
+    "precision": 0.072992700729927,
+    "recall": 0.045351473922902494,
+    "f1": 0.055944055944055944,
+    "overlap": 0.8523541801876657
+  },
+  "reference_stats": {
+    "note_count": 882,
+    "first_onset": 0.9088541666666666,
+    "last_offset": 65.99479166666666,
+    "span": 65.08593749999999,
+    "duration_mean": 0.09166548563870001,
+    "duration_median": 0.04557291666666785,
+    "duration_min": 0.0013020833333330373,
+    "duration_max": 1.265625,
+    "pitch_min": 31,
+    "pitch_max": 89
+  },
+  "est_stats": {
+    "note_count": 548,
+    "first_onset": 0.9181818181818181,
+    "last_offset": 68.53181818181818,
+    "span": 67.61363636363636,
+    "duration_mean": 0.2567850033178497,
+    "duration_median": 0.1863636363636374,
+    "duration_min": 0.1272727272727252,
+    "duration_max": 1.6500000000000057,
+    "pitch_min": 31,
+    "pitch_max": 89
+  },
+  "suspects": [
+    {
+      "suspect": "offset_duration_matching",
+      "f1_gain": 0.6265734265734266,
+      "detail": "F1 rises to 0.6755 when offset matching is disabled"
+    },
+    {
+      "suspect": "onset_misalignment",
+      "f1_gain": 0.10769230769230767,
+      "detail": "F1 rises to 0.1566 at onset_tolerance=0.5"
+    }
+  ]
+}
