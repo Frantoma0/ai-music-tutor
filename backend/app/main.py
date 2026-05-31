@@ -4,7 +4,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.tools import router as tools_router
+from app.api.lessons import router as lessons_router
 from app.api.ws import router as ws_router
+from app.db.database import DEFAULT_DB_PATH, initialize_database
 
 
 app = FastAPI(
@@ -18,6 +20,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -26,7 +30,13 @@ app.add_middleware(
 
 
 app.include_router(tools_router)
+app.include_router(lessons_router)
 app.include_router(ws_router)
+
+
+@app.on_event("startup")
+async def initialize_app_database() -> None:
+    await initialize_database(DEFAULT_DB_PATH)
 
 @app.get("/health")
 def health() -> dict:

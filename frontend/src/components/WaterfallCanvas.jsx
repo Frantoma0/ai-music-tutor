@@ -1,35 +1,193 @@
 import React, { useEffect, useRef } from "react";
 import {
-  confidenceClass,
+  confidenceLevel,
   handForPitch,
+  noteDisplayContent,
   pitchToX,
   LOWEST_PITCH,
   HIGHEST_PITCH,
 } from "../lib/noteMapping";
+import { confidenceStyle, lessonColors } from "../lib/designTokens";
+
+
+const STAGE_MIN_HEIGHT = 640;
+const KEYBOARD_HEIGHT = 118;
+const KEYBOARD_WHITE_KEY_HEIGHT = 96;
+const KEYBOARD_BLACK_KEY_HEIGHT = 60;
+const KEYBOARD_BLACK_KEY_WIDTH_RATIO = 0.58;
+
+const PLAYFIELD_BG_LEFT = "#2F49AA";
+const PLAYFIELD_BG_MID = "#5448A0";
+const PLAYFIELD_BG_RIGHT = "#B05C9E";
+const PLAYFIELD_OVERLAY_TOP = "rgba(20, 24, 58, 0.22)";
+const PLAYFIELD_OVERLAY_BOTTOM = "rgba(9, 12, 30, 0.34)";
+const PLAYFIELD_GRID = "rgba(255, 255, 255, 0.085)";
+const PLAYFIELD_GRID_STRONG = "rgba(255, 255, 255, 0.13)";
+const PLAYFIELD_BORDER = "rgba(255, 220, 255, 0.52)";
+const HIT_LINE = "rgba(210, 155, 255, 0.30)";
+const HIT_LINE_GLOW = "rgba(190, 120, 255, 0.12)";
+
 
 const PIXELS_PER_SECOND = 140;
-const NOTE_WIDTH = 18;
-const HIT_LINE_Y_RATIO = 0.78;
+const NOTE_WIDTH = 22;
+const NOTE_VISUAL_Y_OFFSET = 10;
+const HIT_LINE_Y_RATIO = 0.985;
 
-function colorForNote(note) {
-  const hand = handForPitch(note.pitch);
-  const confidence = confidenceClass(note.confidence);
+function notePalette(note) {
+  const hand = note.hand === "left" || note.hand === "right"
+    ? note.hand
+    : handForPitch(note.pitch);
 
-  if (confidence === "low") {
-    return "#f97316";
+  return hand === "left" ? lessonColors.leftHand : lessonColors.rightHand;
+}
+
+const UNKNOWN_CONFIDENCE_STYLE = {
+  alpha: 0.72,
+  borderWidth: 1.35,
+  lineDash: [],
+};
+
+function isInCorrectionMask(note) {
+  return Boolean(note.inCorrectionMask || note.in_correction_mask);
+}
+
+function visualConfidenceLevel(note) {
+  if (isInCorrectionMask(note)) {
+    return "low";
   }
 
-  if (confidence === "medium") {
-    return hand === "left" ? "#60a5fa" : "#facc15";
+  if (note.confidence === null || note.confidence === undefined) {
+    return "unknown";
   }
 
-  return hand === "left" ? "#2563eb" : "#22c55e";
+  return confidenceLevel(note.confidence);
+}
+
+function noteAccidentalForPitch(note) {
+  const pitchClass = Number(note.pitch) % 12;
+
+  if ([1, 3, 6, 8, 10].includes(pitchClass)) {
+    return "♯";
+  }
+
+  return "";
+}
+
+function staffStepForPitch(note) {
+  /*
+   * Returns a small visual offset so symbols are not identical.
+   * This is not full notation rendering; it is a compact block icon.
+   */
+  const pitchClass = Number(note.pitch) % 12;
+
+  const stepMap = {
+    0: 2,  // C
+    1: 2,  // C#
+    2: 1,  // D
+    3: 1,  // D#
+    4: 0,  // E
+    5: -1, // F
+    6: -1, // F#
+    7: -2, // G
+    8: -2, // G#
+    9: -3, // A
+    10: -3, // A#
+    11: -4, // B
+  };
+
+  return stepMap[pitchClass] ?? 0;
+}
+
+function drawMiniNotationSymbol(ctx, note, centerX, centerY) {
+  const accidental = noteAccidentalForPitch(note);
+  const pitch = Number(note.pitch);
+  const stepOffset = staffStepForPitch(note) * 1.05;
+  const noteY = centerY + stepOffset;
+
+  const stemUp = pitch < 67;
+  const noteW = 7.2;
+  const noteH = 5.0;
+
+  ctx.save();
+
+  ctx.globalAlpha = 0.98;
+  ctx.fillStyle = "#101124";
+  ctx.strokeStyle = "#101124";
+  ctx.lineWidth = 1.25;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowBlur = 0;
+
+  if (accidental) {
+    ctx.font = "900 18px Georgia, 'Times New Roman', serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(accidental, centerX - 9.8, noteY - 1.2);
+  }
+
+  // Tiny staff hint line for stronger "sheet" feeling.
+  ctx.globalAlpha = 0.22;
+  ctx.beginPath();
+  ctx.moveTo(centerX - 9.2, centerY + 6.8);
+  ctx.lineTo(centerX + 9.2, centerY + 6.8);
+  ctx.stroke();
+
+  ctx.globalAlpha = 0.98;
+
+  // Note head.
+  ctx.save();
+  ctx.translate(centerX - 1, noteY);
+  ctx.rotate(-0.28);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, noteW / 2, noteH / 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Stem.
+  const stemX = centerX + 3.2;
+
+  ctx.beginPath();
+
+  if (stemUp) {
+    ctx.moveTo(stemX, noteY - 1.2);
+    ctx.lineTo(stemX, noteY - 15.5);
+  } else {
+    ctx.moveTo(centerX - 4.2, noteY + 1.2);
+    ctx.lineTo(centerX - 4.2, noteY + 15.5);
+  }
+
+  ctx.stroke();
+
+  // Small flag for eighth-note feeling.
+  ctx.beginPath();
+
+  if (stemUp) {
+    ctx.moveTo(stemX, noteY - 15.5);
+    ctx.quadraticCurveTo(stemX + 6.2, noteY - 13.2, stemX + 4.2, noteY - 8);
+  } else {
+    ctx.moveTo(centerX - 4.2, noteY + 15.5);
+    ctx.quadraticCurveTo(centerX + 2.6, noteY + 13.2, centerX + 0.6, noteY + 8);
+  }
+
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawRoundedRect(ctx, x, y, width, height, radius) {
+  ctx.beginPath();
+
+  if (typeof ctx.roundRect === "function") {
+    ctx.roundRect(x, y, width, height, radius);
+  } else {
+    ctx.rect(x, y, width, height);
+  }
 }
 
 function drawKeyboardGuide(ctx, width, height) {
   ctx.save();
 
-  ctx.strokeStyle = "rgba(148, 163, 184, 0.18)";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.055)";
   ctx.lineWidth = 1;
 
   for (let pitch = LOWEST_PITCH; pitch <= HIGHEST_PITCH; pitch += 1) {
@@ -44,71 +202,190 @@ function drawKeyboardGuide(ctx, width, height) {
   ctx.restore();
 }
 
-function drawHitLine(ctx, width, y) {
+function drawHitLine(ctx, x, y, width) {
   ctx.save();
 
-  ctx.strokeStyle = "rgba(248, 250, 252, 0.75)";
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + width, y);
+  ctx.strokeStyle = HIT_LINE;
   ctx.lineWidth = 2;
+  ctx.stroke();
 
   ctx.beginPath();
-  ctx.moveTo(0, y);
-  ctx.lineTo(width, y);
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + width, y);
+  ctx.strokeStyle = HIT_LINE_GLOW;
+  ctx.lineWidth = 8;
   ctx.stroke();
 
   ctx.restore();
 }
 
-function drawNote(ctx, note, width, hitLineY, currentTime, tempo) {
+function drawHitSpark(ctx, x, y, color, intensity = 1) {
+  ctx.save();
+
+  const alpha = 0.72 * intensity;
+
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.15;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 8;
+
+  const rays = [
+    [0, -11, 0, -3],
+    [0, 3, 0, 11],
+    [-11, 0, -3, 0],
+    [3, 0, 11, 0],
+    [-8, -8, -3, -3],
+    [3, 3, 8, 8],
+    [8, -8, 3, -3],
+    [-3, 3, -8, 8],
+  ];
+
+  for (const [x1, y1, x2, y2] of rays) {
+    ctx.beginPath();
+    ctx.moveTo(x + x1, y + y1);
+    ctx.lineTo(x + x2, y + y2);
+    ctx.stroke();
+  }
+
+  ctx.globalAlpha = 0.9 * intensity;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x, y, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawKeyStrikeGlow(ctx, x, y, color, intensity = 1) {
+  ctx.save();
+
+  const beam = ctx.createLinearGradient(x, y - 44, x, y + 8);
+  beam.addColorStop(0, "rgba(255,255,255,0)");
+  beam.addColorStop(0.58, color);
+  beam.addColorStop(1, "rgba(255,255,255,0)");
+
+  ctx.globalAlpha = 0.34 * intensity;
+  ctx.fillStyle = beam;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 12;
+  ctx.fillRect(x - 1, y - 44, 2, 52);
+
+  ctx.restore();
+}
+
+function drawSubtleBaseGlow(ctx, x, y, color, intensity = 1) {
+  ctx.save();
+
+  const glow = ctx.createRadialGradient(x, y, 0, x, y, 22);
+  glow.addColorStop(0, color);
+  glow.addColorStop(0.35, "rgba(255,255,255,0.18)");
+  glow.addColorStop(1, "rgba(255,255,255,0)");
+
+  ctx.globalAlpha = 0.28 * intensity;
+  ctx.fillStyle = glow;
+
+  ctx.beginPath();
+  ctx.ellipse(x, y + 2, 22, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawNote(ctx, note, width, hitLineY, musicalTime, noteDisplayMode) {
   const x = pitchToX(note.pitch, width);
-  const noteDuration = Math.max(note.end - note.start, 0.08);
-
-  const scaledStart = note.start / tempo;
-  const scaledEnd = note.end / tempo;
-  const scaledCurrent = currentTime;
-
-  const yTop = hitLineY - (scaledStart - scaledCurrent) * PIXELS_PER_SECOND;
-  const yBottom = hitLineY - (scaledEnd - scaledCurrent) * PIXELS_PER_SECOND;
+  const yTop = hitLineY - (note.start - musicalTime) * PIXELS_PER_SECOND + NOTE_VISUAL_Y_OFFSET;
+  const yBottom = hitLineY - (note.end - musicalTime) * PIXELS_PER_SECOND + NOTE_VISUAL_Y_OFFSET;
 
   const y = Math.min(yTop, yBottom);
-  const h = Math.max(Math.abs(yBottom - yTop), noteDuration * PIXELS_PER_SECOND * 0.35);
+  const h = Math.max(Math.abs(yBottom - yTop), 34);
 
   if (y > hitLineY + 120 || y + h < -80) {
     return;
   }
 
-  ctx.save();
+  const palette = notePalette(note);
+  const level = visualConfidenceLevel(note);
+  const confidence =
+    level === "unknown" ? UNKNOWN_CONFIDENCE_STYLE : confidenceStyle[level];
 
-  ctx.fillStyle = colorForNote(note);
-  ctx.strokeStyle = "rgba(15, 23, 42, 0.65)";
-  ctx.lineWidth = 1.5;
-
-  const radius = 7;
   const rectX = x - NOTE_WIDTH / 2;
   const rectY = y;
   const rectW = NOTE_WIDTH;
   const rectH = h;
 
-  ctx.beginPath();
+  ctx.save();
 
-  if (typeof ctx.roundRect === "function") {
-    ctx.roundRect(rectX, rectY, rectW, rectH, radius);
-  } else {
-    ctx.rect(rectX, rectY, rectW, rectH);
-  }
+  ctx.globalAlpha = confidence.alpha;
+  ctx.shadowColor = palette.glow;
+  ctx.shadowBlur = level === "low" ? 3 : level === "unknown" ? 4 : 9;
 
+  const fillGradient = ctx.createLinearGradient(rectX, rectY, rectX, rectY + rectH);
+  fillGradient.addColorStop(0, palette.stroke);
+  fillGradient.addColorStop(0.5, palette.fill);
+  fillGradient.addColorStop(1, palette.fill);
+
+  ctx.fillStyle = fillGradient;
+  ctx.strokeStyle = palette.stroke;
+  ctx.lineWidth = confidence.borderWidth;
+  ctx.setLineDash(confidence.lineDash);
+
+  drawRoundedRect(ctx, rectX, rectY, rectW, rectH, 8);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = "rgba(15, 23, 42, 0.75)";
-  ctx.font = "10px Inter, system-ui, sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText(note.pitchName, x, rectY - 5);
+  ctx.setLineDash([]);
+
+  if (noteDisplayMode === "symbol") {
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+    drawMiniNotationSymbol(ctx, note, x, rectY + Math.min(rectH / 2, 24));
+  } else {
+    const label = noteDisplayContent(note, noteDisplayMode);
+
+    if (label) {
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#0f172a";
+      ctx.font = "800 13px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, x, rectY + Math.min(rectH / 2, 22));
+    }
+  }
 
   ctx.restore();
+
+  const noteIsTouchingHitLine = y <= hitLineY && y + h >= hitLineY;
+
+  if (noteIsTouchingHitLine) {
+    const centerDistance = Math.abs((y + h / 2) - hitLineY);
+    const intensity = Math.max(0.28, Math.min(1, 1 - centerDistance / 120));
+
+    drawSubtleBaseGlow(ctx, x, hitLineY, palette.glow, intensity);
+    drawKeyStrikeGlow(ctx, x, hitLineY, palette.glow, intensity);
+  }
+
+  const onsetDistance = Math.abs(yBottom - hitLineY);
+
+  if (onsetDistance < 7) {
+    const intensity = Math.max(0.2, 1 - onsetDistance / 7);
+    drawHitSpark(ctx, x, hitLineY, palette.stroke, intensity);
+  }
 }
 
-export function WaterfallCanvas({ notes, currentTime, tempo }) {
+export function WaterfallCanvas({
+  notes,
+  currentTime,
+  musicalTime,
+  tempo,
+  noteDisplayMode,
+}) {
   const canvasRef = useRef(null);
+  const effectiveMusicalTime = musicalTime ?? currentTime * tempo;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -154,21 +431,77 @@ export function WaterfallCanvas({ notes, currentTime, tempo }) {
 
     ctx.clearRect(0, 0, width, height);
 
-    const gradient = ctx.createLinearGradient(0, 0, 0, height);
-    gradient.addColorStop(0, "#020617");
-    gradient.addColorStop(1, "#111827");
+    const background = ctx.createLinearGradient(0, 0, width, 0);
+    background.addColorStop(0.00, "#071026");
+    background.addColorStop(0.24, "#111A3F");
+    background.addColorStop(0.52, "#17143D");
+    background.addColorStop(0.76, "#241542");
+    background.addColorStop(1.00, "#381A48");
 
-    ctx.fillStyle = gradient;
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, width, height);
+
+    const leftGlow = ctx.createRadialGradient(
+      width * 0.02,
+      height * 0.48,
+      0,
+      width * 0.02,
+      height * 0.48,
+      width * 0.42
+    );
+    leftGlow.addColorStop(0, "rgba(77, 112, 215, 0.32)");
+    leftGlow.addColorStop(0.42, "rgba(77, 112, 215, 0.14)");
+    leftGlow.addColorStop(1, "rgba(77, 112, 215, 0)");
+
+    ctx.fillStyle = leftGlow;
+    ctx.fillRect(0, 0, width, height);
+
+    const centerGlow = ctx.createRadialGradient(
+      width * 0.52,
+      height * 0.45,
+      0,
+      width * 0.52,
+      height * 0.45,
+      width * 0.48
+    );
+    centerGlow.addColorStop(0, "rgba(116, 91, 198, 0.18)");
+    centerGlow.addColorStop(0.48, "rgba(116, 91, 198, 0.08)");
+    centerGlow.addColorStop(1, "rgba(116, 91, 198, 0)");
+
+    ctx.fillStyle = centerGlow;
+    ctx.fillRect(0, 0, width, height);
+
+    const rightGlow = ctx.createRadialGradient(
+      width * 1.02,
+      height * 0.45,
+      0,
+      width * 1.02,
+      height * 0.45,
+      width * 0.44
+    );
+    rightGlow.addColorStop(0, "rgba(190, 78, 158, 0.26)");
+    rightGlow.addColorStop(0.45, "rgba(190, 78, 158, 0.12)");
+    rightGlow.addColorStop(1, "rgba(190, 78, 158, 0)");
+
+    ctx.fillStyle = rightGlow;
+    ctx.fillRect(0, 0, width, height);
+
+    const depthOverlay = ctx.createLinearGradient(0, 0, 0, height);
+    depthOverlay.addColorStop(0.00, "rgba(4, 7, 20, 0.26)");
+    depthOverlay.addColorStop(0.55, "rgba(5, 7, 18, 0.10)");
+    depthOverlay.addColorStop(1.00, "rgba(8, 6, 18, 0.24)");
+
+    ctx.fillStyle = depthOverlay;
     ctx.fillRect(0, 0, width, height);
 
     drawKeyboardGuide(ctx, width, height);
 
     for (const note of notes) {
-      drawNote(ctx, note, width, hitLineY, currentTime, tempo);
+      drawNote(ctx, note, width, hitLineY, effectiveMusicalTime, noteDisplayMode);
     }
 
     drawHitLine(ctx, width, hitLineY);
-  }, [notes, currentTime, tempo]);
+  }, [notes, currentTime, effectiveMusicalTime, tempo, noteDisplayMode]);
 
   return <canvas ref={canvasRef} className="waterfall-canvas" />;
 }

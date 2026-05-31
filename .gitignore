@@ -64,3 +64,12 @@ data/processed/
 data/stems/
 data/midi/
 artifacts/
+
+# Local patch backups
+*.bak
+*.bak.*
+*.broken.*
+frontend/src/**/*.bak
+frontend/src/**/*.bak.*
+backend/app/**/*.bak
+backend/app/**/*.bak.*
