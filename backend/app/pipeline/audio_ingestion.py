@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import sys
 import subprocess
 import uuid
 from dataclasses import asdict, dataclass
@@ -103,31 +104,61 @@ def _validate_local_file(path: Path) -> None:
 
 
 def _download_with_ytdlp(source_url: str, output_dir: Path) -> Path:
-    try:
-        import yt_dlp
-    except Exception as exc:
-        raise RuntimeError("yt-dlp is not installed, cannot download URL input.") from exc
-
+    output_dir.mkdir(parents=True, exist_ok=True)
     output_template = str(output_dir / "downloaded.%(ext)s")
 
-    options = {
-        "format": "bestaudio/best",
-        "outtmpl": output_template,
-        "quiet": True,
-        "noplaylist": True,
-    }
+    command = [
+        "/usr/local/bin/yt-dlp",
+        "--js-runtimes",
+        "deno",
+        "-f",
+        "140/251/139/249/bestaudio/best/18",
+        "--extractor-args",
+        "youtube:player_client=web,android,mweb",
+        "-o",
+        output_template,
+        source_url,
+    ]
 
-    with yt_dlp.YoutubeDL(options) as ydl:
-        info = ydl.extract_info(source_url, download=True)
-        downloaded_path = Path(ydl.prepare_filename(info))
+    completed = subprocess.run(
+        command,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
 
-    if not downloaded_path.exists():
-        candidates = list(output_dir.glob("downloaded.*"))
-        if not candidates:
-            raise FileNotFoundError("yt-dlp finished but no downloaded file was found.")
-        downloaded_path = candidates[0]
+    if completed.returncode != 0:
+        stderr = completed.stderr or ""
 
-    return downloaded_path
+        if (
+            "DRM protected" in stderr
+            or "Requested format is not available" in stderr
+            or "Only images are available" in stderr
+            or "PO Token" in stderr
+            or "HTTP Error 403" in stderr
+        ):
+            raise RuntimeError(
+                "This video cannot be downloaded. It is protected, unavailable, "
+                "or requires verification. Please try a different non-DRM video "
+                "or upload a local audio file."
+            )
+
+        raise RuntimeError(
+            "yt-dlp CLI failed.\n"
+            f"Command: {command!r}\n"
+            f"Exit code: {completed.returncode}\n"
+            f"STDOUT:\n{completed.stdout}\n"
+            f"STDERR:\n{stderr}"
+        )
+
+    candidates = sorted(output_dir.glob("downloaded.*"))
+
+    if candidates:
+        return candidates[0]
+
+    raise FileNotFoundError(
+        "yt-dlp completed successfully but no downloaded.* file was found."
+    )
 
 
 def _normalize_to_wav(input_path: Path, wav_path: Path) -> None:
