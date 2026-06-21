@@ -60,11 +60,19 @@ function keyClassName(pitch, activeByPitch) {
   return classes.join(" ");
 }
 
-function shouldShowOctaveLabel(pitch) {
-  return pitch % 12 === 0;
-}
+function shouldShowKeyLabel(pitch, labelMode) {
+    if (labelMode === "off") {
+      return false;
+    }
 
-export function PianoKeyboard({ notes, musicalTime = 0 }) {
+    if (labelMode === "all") {
+      return true;
+    }
+
+    return pitch % 12 === 0;
+  }
+
+  export function PianoKeyboard({ notes, musicalTime = 0, labelMode = "c-only" }) {
   const activeNotes = activeNotesAtTime(notes, musicalTime);
   const activeByPitch = new Map();
 
@@ -99,11 +107,11 @@ export function PianoKeyboard({ notes, musicalTime = 0 }) {
         {whitePitches.map((pitch) => {
           return (
             <div key={pitch} className={keyClassName(pitch, activeByPitch)}>
-              {shouldShowOctaveLabel(pitch) && (
-                <span className="key-label">
-                  {pitchName(pitch)}
-                </span>
-              )}
+              {shouldShowKeyLabel(pitch, labelMode) && (
+            <span className="key-label">
+              {pitchName(pitch)}
+            </span>
+          )}
             </div>
           );
         })}
@@ -122,10 +130,16 @@ export function PianoKeyboard({ notes, musicalTime = 0 }) {
 
           return (
             <div
-              key={pitch}
-              className={keyClassName(pitch, activeByPitch)}
-              style={{ left: `${leftPercent}%` }}
-            />
+            key={pitch}
+            className={keyClassName(pitch, activeByPitch)}
+            style={{ left: `${leftPercent}%` }}
+          >
+            {shouldShowKeyLabel(pitch, labelMode) && (
+              <span className="key-label black-label">
+                {pitchName(pitch)}
+              </span>
+            )}
+          </div>
           );
         })}
       </div>

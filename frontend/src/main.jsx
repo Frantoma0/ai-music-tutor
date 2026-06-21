@@ -24,6 +24,7 @@ function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [tempo, setTempo] = useState(1);
   const [noteDisplayMode, setNoteDisplayMode] = useState("letters");
+  const [keyboardLabelMode, setKeyboardLabelMode] = useState("c-only");
   const [viewMode, setViewMode] = useState("blocks");
   const [activeHand, setActiveHand] = React.useState("both");
   const [lesson, setLesson] = useState(null);
@@ -66,24 +67,119 @@ function App() {
   const synthRef = useRef(null);
   const triggeredNotesRef = useRef(new Set());
 
+  // useEffect(() => {
+  //   const reverb = new Tone.Reverb({
+  //   decay: 3.2,
+  //   wet: 0.26,
+  // }).toDestination();
+
+  // const compressor = new Tone.Compressor({
+  //   threshold: -20,
+  //   ratio: 2.6,
+  //   attack: 0.035,
+  //   release: 0.32,
+  // }).connect(reverb);
+
+  // const gain = new Tone.Gain(0.68).connect(compressor);
+
+  // synthRef.current = new Tone.PolySynth(Tone.Synth, {
+  //   maxPolyphony: 64,
+  //   oscillator: {
+  //     type: "triangle8",
+  //   },
+  //   envelope: {
+  //     attack: 0.015,
+  //     decay: 0.28,
+  //     sustain: 0.28,
+  //     release: 1.6,
+  //   },
+  // }).connect(gain);
+
+  //   return () => {
+  //     synthRef.current?.dispose();
+  //   };
+  // }, []);
+
   useEffect(() => {
-    synthRef.current = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: "triangle" },
-      envelope: {
-        attack: 0.01,
-        decay: 0.18,
-        sustain: 0.28,
-        release: 0.45,
-      },
+    const reverb = new Tone.Reverb({
+      decay: 3.6,
+      wet: 0.18,
     }).toDestination();
 
-    synthRef.current.volume.value = -10;
+    const compressor = new Tone.Compressor({
+      threshold: -20,
+      ratio: 2.4,
+      attack: 0.035,
+      release: 0.32,
+    }).connect(reverb);
+
+    const gain = new Tone.Gain(0.82).connect(compressor);
+
+    const fallbackSynth = new Tone.PolySynth(Tone.Synth, {
+      maxPolyphony: 64,
+      oscillator: {
+        type: "triangle8",
+      },
+      envelope: {
+        attack: 0.015,
+        decay: 0.28,
+        sustain: 0.28,
+        release: 1.6,
+      },
+    }).connect(gain);
+
+    const pianoSampler = new Tone.Sampler({
+      urls: {
+        A0: "A0.mp3",
+        C1: "C1.mp3",
+        "D#1": "Ds1.mp3",
+        "F#1": "Fs1.mp3",
+        A1: "A1.mp3",
+        C2: "C2.mp3",
+        "D#2": "Ds2.mp3",
+        "F#2": "Fs2.mp3",
+        A2: "A2.mp3",
+        C3: "C3.mp3",
+        "D#3": "Ds3.mp3",
+        "F#3": "Fs3.mp3",
+        A3: "A3.mp3",
+        C4: "C4.mp3",
+        "D#4": "Ds4.mp3",
+        "F#4": "Fs4.mp3",
+        A4: "A4.mp3",
+        C5: "C5.mp3",
+        "D#5": "Ds5.mp3",
+        "F#5": "Fs5.mp3",
+        A5: "A5.mp3",
+        C6: "C6.mp3",
+        "D#6": "Ds6.mp3",
+        "F#6": "Fs6.mp3",
+        A6: "A6.mp3",
+        C7: "C7.mp3",
+        "D#7": "Ds7.mp3",
+        "F#7": "Fs7.mp3",
+        A7: "A7.mp3",
+        C8: "C8.mp3",
+      },
+      baseUrl: "/samples/piano/",
+      release: 1.4,
+      onload: () => {
+        console.log("Acoustic piano samples loaded");
+        synthRef.current = pianoSampler;
+        fallbackSynth.dispose();
+      },
+    }).connect(gain);
+
+    synthRef.current = fallbackSynth;
 
     return () => {
-      synthRef.current?.dispose();
+      pianoSampler.dispose();
+      fallbackSynth.dispose();
+      gain.dispose();
+      compressor.dispose();
+      reverb.dispose();
     };
   }, []);
-
 
   useEffect(() => {
     let cancelled = false;
@@ -125,18 +221,32 @@ function App() {
         note.start >= previousMusicalTime && note.start < nextMusicalTime;
 
       if (!alreadyTriggered && isInWindow) {
-        const duration = Math.max((note.end - note.start) / tempo, 0.08);
-        const velocity = Math.max(0.25, Math.min(note.confidence ?? 0.8, 1));
+          const duration = Math.max((note.end - note.start) / tempo, 0.08);
 
-        synth.triggerAttackRelease(
-          midiToToneNote(note.pitch),
-          duration,
-          undefined,
-          velocity
-        );
+          const normalizedVelocity = Math.min(
+            0.95,
+            Math.max(0.22, (note.velocity ?? 72) / 127)
+          );
 
-        triggeredNotesRef.current.add(note.id);
-      }
+          const confidenceWeight =
+            note.confidence === null || note.confidence === undefined
+              ? 0.85
+              : Math.min(1, Math.max(0.45, note.confidence));
+
+          const expressiveVelocity = Math.pow(
+            normalizedVelocity * confidenceWeight,
+            0.82
+          );
+
+          synth.triggerAttackRelease(
+            midiToToneNote(note.pitch),
+            duration,
+            undefined,
+            expressiveVelocity
+          );
+
+          triggeredNotesRef.current.add(note.id);
+        }
     }
   }
 
@@ -311,6 +421,7 @@ return (
                 currentTime={currentTime}
                 musicalTime={musicalTime}
                 tempo={tempo}
+                labelMode={keyboardLabelMode}
               />
             </>
           )}
@@ -338,6 +449,7 @@ return (
                 currentTime={currentTime}
                 musicalTime={musicalTime}
                 tempo={tempo}
+                labelMode={keyboardLabelMode}
               />
             </>
           )}
@@ -367,29 +479,64 @@ return (
             <strong>{Math.round(tempo * 100)}%</strong>
           </label>
 
-          <div className="mode-switch" aria-label="Note display mode">
-            <span>Display</span>
+        <div className="mini-control-pill" aria-label="Note display mode">
+            <span className="mini-mode-label">Display</span>
 
-            <button
-              className={noteDisplayMode === "blank" ? "active" : ""}
-              onClick={() => setNoteDisplayMode("blank")}
-            >
-              Blank
-            </button>
+            <div className="mini-mode-switch">
+              <button
+                type="button"
+                className={noteDisplayMode === "blank" ? "active" : ""}
+                onClick={() => setNoteDisplayMode("blank")}
+              >
+                Blank
+              </button>
 
-            <button
-              className={noteDisplayMode === "letters" ? "active" : ""}
-              onClick={() => setNoteDisplayMode("letters")}
-            >
-              Letters
-            </button>
+              <button
+                type="button"
+                className={noteDisplayMode === "letters" ? "active" : ""}
+                onClick={() => setNoteDisplayMode("letters")}
+              >
+                A–G
+              </button>
 
-            <button
-              className={noteDisplayMode === "symbol" ? "active" : ""}
-              onClick={() => setNoteDisplayMode("symbol")}
-            >
-              Symbols
-            </button>
+              <button
+                type="button"
+                className={noteDisplayMode === "symbol" ? "active" : ""}
+                onClick={() => setNoteDisplayMode("symbol")}
+              >
+                ♪
+              </button>
+            </div>
+          </div>
+
+          <div className="mini-control-pill" aria-label="Keyboard label mode">
+            <span className="mini-mode-label">Keys</span>
+
+            <div className="mini-mode-switch">
+              <button
+                type="button"
+                className={keyboardLabelMode === "off" ? "active" : ""}
+                onClick={() => setKeyboardLabelMode("off")}
+              >
+                Off
+              </button>
+
+              <button
+                type="button"
+                className={keyboardLabelMode === "c-only" ? "active" : ""}
+                onClick={() => setKeyboardLabelMode("c-only")}
+              >
+                C
+              </button>
+
+              <button
+                type="button"
+                className={keyboardLabelMode === "all" ? "active" : ""}
+                onClick={() => setKeyboardLabelMode("all")}
+              >
+                All
+              </button>
+            </div>
           </div>
 
           <HandsControl

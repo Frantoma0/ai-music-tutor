@@ -4763,3 +4763,362 @@ main.app-shell {
     display: none;
   }
 }
+
+
+.controls-card {
+  gap: 10px;
+  padding: 10px 16px;
+  align-items: center;
+  overflow-x: hidden;
+}
+
+.transport-group {
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.primary-control,
+.secondary-control {
+  min-width: 74px;
+  padding: 10px 16px;
+}
+
+.tempo-control {
+  flex: 0 1 300px;
+  min-width: 245px;
+  max-width: 320px;
+  gap: 10px;
+  padding: 10px 14px;
+}
+
+.tempo-control input[type="range"] {
+  min-width: 120px;
+  max-width: 150px;
+}
+
+.mode-switch {
+  gap: 4px;
+  padding: 6px;
+  flex: 0 0 auto;
+}
+
+.mode-switch > span {
+  margin-right: 4px;
+  min-width: auto;
+  white-space: nowrap;
+}
+
+.mode-switch button {
+  min-width: 46px;
+  padding: 8px 11px;
+}
+
+.confidence-legend {
+  min-width: unset;
+  padding: 9px 14px;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.time-readout {
+  min-width: 68px;
+  padding: 8px 10px;
+  text-align: right;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 1380px) {
+  .controls-card {
+    gap: 8px;
+    padding: 9px 12px;
+  }
+
+  .primary-control,
+  .secondary-control {
+    min-width: 66px;
+    padding: 9px 12px;
+  }
+
+  .tempo-control {
+    min-width: 220px;
+    max-width: 260px;
+  }
+
+  .tempo-control input[type="range"] {
+    max-width: 120px;
+  }
+
+  .mode-switch button {
+    min-width: 40px;
+    padding: 7px 9px;
+  }
+
+  .confidence-legend {
+    padding: 8px 11px;
+  }
+}
+
+.compact-select-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 6px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.42);
+  border: 1px solid rgba(128, 91, 206, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58);
+}
+
+.compact-select-control {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  white-space: nowrap;
+  color: #675985;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.compact-select-control > span {
+  opacity: 0.82;
+  pointer-events: none;
+}
+
+.compact-select-control select {
+  appearance: none;
+  min-width: 86px;
+  padding: 8px 26px 8px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(139, 103, 218, 0.24);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(245, 238, 255, 0.82)),
+    url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23675985' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  color: #3f326d;
+  font: inherit;
+  cursor: pointer;
+  outline: none;
+}
+
+.compact-select-control select:focus {
+  border-color: rgba(139, 103, 218, 0.55);
+  box-shadow: 0 0 0 3px rgba(161, 128, 236, 0.16);
+}
+
+@media (max-width: 1380px) {
+  .compact-select-group {
+    gap: 6px;
+    padding: 5px;
+  }
+
+  .compact-select-control {
+    gap: 5px;
+    font-size: 0.72rem;
+  }
+
+  .compact-select-control select {
+    min-width: 76px;
+    padding: 7px 22px 7px 9px;
+  }
+}
+.compact-option-panel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 6px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.42);
+  border: 1px solid rgba(128, 91, 206, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.62),
+    0 10px 24px rgba(91, 73, 150, 0.06);
+}
+
+.mini-mode-switch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.34);
+}
+
+.mini-mode-label {
+  padding: 0 6px 0 7px;
+  color: #675985;
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  opacity: 0.82;
+  pointer-events: none;
+}
+
+.mini-mode-switch button {
+  min-width: 38px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  background: transparent;
+  color: #66557f;
+  font-size: 0.74rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.mini-mode-switch button:hover {
+  background: rgba(255, 255, 255, 0.56);
+  color: #4f3d78;
+}
+
+.mini-mode-switch button.active {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(246, 239, 255, 0.92));
+  border-color: rgba(145, 103, 221, 0.38);
+  color: #3d2f68;
+  box-shadow:
+    0 8px 18px rgba(101, 75, 160, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.mini-mode-switch button:active {
+  transform: translateY(1px);
+}
+
+@media (max-width: 1380px) {
+  .compact-option-panel {
+    gap: 6px;
+    padding: 5px;
+  }
+
+  .mini-mode-switch {
+    gap: 3px;
+  }
+
+  .mini-mode-label {
+    padding: 0 4px;
+    font-size: 0.68rem;
+  }
+
+  .mini-mode-switch button {
+    min-width: 34px;
+    height: 32px;
+    padding: 0 8px;
+    font-size: 0.68rem;
+  }
+}
+
+.mini-control-pill {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.42);
+  border: 1px solid rgba(128, 91, 206, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.62),
+    0 10px 24px rgba(91, 73, 150, 0.06);
+}
+
+.mini-control-pill .mini-mode-label {
+  min-width: 46px;
+  padding: 0;
+  color: #675985;
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  opacity: 0.82;
+  pointer-events: none;
+}
+
+.mini-control-pill .mini-mode-switch {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.34);
+}
+
+.mini-control-pill .mini-mode-switch button {
+  min-width: 42px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: #66557f;
+  font-size: 0.74rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.mini-control-pill .mini-mode-switch button:hover {
+  background: rgba(255, 255, 255, 0.56);
+  color: #4f3d78;
+}
+
+.mini-control-pill .mini-mode-switch button.active {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(246, 239, 255, 0.92));
+  border-color: rgba(145, 103, 221, 0.38);
+  color: #3d2f68;
+  box-shadow:
+    0 8px 18px rgba(101, 75, 160, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.mini-control-pill .mini-mode-switch button:active {
+  transform: translateY(1px);
+}
+
+/* Hide old wrapper if it still exists in CSS; JSX no longer uses it. */
+.compact-option-panel {
+  display: none;
+}
+
+@media (max-width: 1380px) {
+  .mini-control-pill {
+    min-height: 54px;
+    gap: 7px;
+    padding: 7px 9px;
+  }
+
+  .mini-control-pill .mini-mode-label {
+    min-width: 38px;
+    font-size: 0.68rem;
+  }
+
+  .mini-control-pill .mini-mode-switch {
+    height: 38px;
+    gap: 3px;
+    padding: 3px;
+  }
+
+  .mini-control-pill .mini-mode-switch button {
+    min-width: 34px;
+    height: 30px;
+    padding: 0 8px;
+    font-size: 0.68rem;
+  }
+}
