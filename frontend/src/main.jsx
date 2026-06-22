@@ -15,8 +15,12 @@ import {
   dedupeRunsByJobId,
   fetchLesson,
   fetchPipelineRuns,
+  makeJobIdFromTitle,
   mapLessonNotesToUiNotes,
+  runAudioToAnalysis,
   titleForRun,
+  titleFromFilename,
+  uploadAudioFile,
 } from "./api/lessonApi";
 
 const FALLBACK_DURATION_SECONDS = 4.2;
@@ -96,6 +100,13 @@ function App() {
   const [lesson, setLesson] = useState(null);
   const [lessonNotes, setLessonNotes] = useState(demoNotes);
   const [lessonLoadStatus, setLessonLoadStatus] = useState("loading");
+  const [isNewLessonOpen, setIsNewLessonOpen] = useState(false);
+  const [newLessonTitle, setNewLessonTitle] = useState("");
+  const [newLessonSourceType, setNewLessonSourceType] = useState("youtube");
+  const [newLessonFile, setNewLessonFile] = useState(null);
+  const [newLessonSource, setNewLessonSource] = useState("");
+  const [newLessonStatus, setNewLessonStatus] = useState("idle");
+  const [newLessonError, setNewLessonError] = useState("");
 
   const lessonMeta = lesson?.meta ?? {};
   const lessonDurationSeconds =
@@ -410,6 +421,13 @@ function App() {
     setCurrentTime(0);
   }
 
+  async function refreshPipelineRuns() {
+  const runs = await fetchPipelineRuns(20);
+  const dedupedRuns = dedupeRunsByJobId(runs);
+  setPipelineRuns(dedupedRuns);
+  return dedupedRuns;
+  }
+
   function handleTempoChange(event) {
     setTempo(Number(event.target.value));
     lastFrameRef.current = null;
@@ -445,6 +463,70 @@ function App() {
 
 function handleRenameLesson() {
   handleRenameLessonByJobId(currentLessonJobId, lessonTitle);
+}
+
+async function handleCreateNewLesson() {
+  const title = newLessonTitle.trim();
+
+  if (!title) {
+    setNewLessonError("Please enter a lesson title.");
+    return;
+  }
+
+  const jobId = makeJobIdFromTitle(title);
+
+  let source = newLessonSource.trim();
+
+  if (newLessonSourceType === "upload") {
+    if (!newLessonFile) {
+      setNewLessonError("Please choose a .wav or .mp3 file.");
+      return;
+    }
+  } else if (!source) {
+    setNewLessonError("Please enter a source.");
+    return;
+  }
+
+  setNewLessonStatus("running");
+  setNewLessonError("");
+
+  try {
+    if (newLessonSourceType === "upload") {
+      const uploadResult = await uploadAudioFile({
+        file: newLessonFile,
+        jobId,
+      });
+
+      source = uploadResult.path;
+    }
+
+    await runAudioToAnalysis({
+      source,
+      job_id: jobId,
+      processed_dir: "data/processed",
+      stems_dir: "data/stems",
+      artifacts_dir: "data/midi",
+      use_basic_pitch: true,
+    });
+
+    setTitleOverrides((previous) => ({
+      ...previous,
+      [jobId]: title,
+    }));
+
+    await refreshPipelineRuns();
+
+    setCurrentLessonJobId(jobId);
+    setIsNewLessonOpen(false);
+    setNewLessonTitle("");
+    setNewLessonSource("");
+    setNewLessonFile(null);
+    setNewLessonStatus("idle");
+    setIsSessionsOpen(false);
+  } catch (error) {
+    setNewLessonStatus("error");
+    setNewLessonError(error.message || "Failed to create lesson.");
+  }
 }
 
   const stageStateClass = isPlaying ? "is-playing" : "";
@@ -652,7 +734,18 @@ return (
                 </div>
 
                 <div className="drawer-action-grid">
-                  <button type="button" className="drawer-action-button" disabled>
+                  <button
+                    type="button"
+                    className="drawer-action-button"
+                    onClick={() => {
+                      setNewLessonTitle("");
+                      setNewLessonSource("");
+                      setNewLessonSourceType("youtube");
+                      setNewLessonError("");
+                      setNewLessonStatus("idle");
+                      setIsNewLessonOpen(true);
+                    }}
+                  >
                     + New lesson
                   </button>
 
@@ -680,6 +773,126 @@ return (
             </aside>
           </div>
         )}
+
+        {isNewLessonOpen && (
+        <div className="new-lesson-modal-layer" aria-label="New lesson modal">
+          <button
+            type="button"
+            className="new-lesson-modal-backdrop"
+            aria-label="Close new lesson modal"
+            onClick={() => setIsNewLessonOpen(false)}
+          />
+
+          <section className="new-lesson-modal" role="dialog" aria-label="Create new lesson">
+            <div className="new-lesson-modal-header">
+              <div>
+                <p className="sessions-drawer-eyebrow">Create</p>
+                <h2>New lesson</h2>
+              </div>
+
+              <button
+                type="button"
+                className="sessions-close-button"
+                aria-label="Close"
+                onClick={() => setIsNewLessonOpen(false)}
+              >
+                <CloseIcon />
+              </button>
+            </div>
+
+            <label className="new-lesson-field">
+              <span>Lesson title</span>
+              <input
+                value={newLessonTitle}
+                onChange={(event) => setNewLessonTitle(event.target.value)}
+                placeholder="Long Live"
+              />
+            </label>
+
+            <div className="new-lesson-source-tabs">
+              <button
+                type="button"
+                className={newLessonSourceType === "youtube" ? "active" : ""}
+                onClick={() => setNewLessonSourceType("youtube")}
+              >
+                YouTube URL
+              </button>
+
+              <button
+                type="button"
+                className={newLessonSourceType === "local" ? "active" : ""}
+                onClick={() => setNewLessonSourceType("local")}
+              >
+                Local path
+              </button>
+
+              <button
+                type="button"
+                className={newLessonSourceType === "upload" ? "active" : ""}
+                onClick={() => setNewLessonSourceType("upload")}
+              >
+                Upload file
+              </button>
+            </div>
+
+          {newLessonSourceType === "upload" ? (
+            <label className="new-lesson-field">
+              <span>Audio file</span>
+              <input
+                type="file"
+                accept=".wav,.mp3,audio/wav,audio/mpeg"
+                onChange={(event) => {
+                  const file = event.target.files?.[0] || null;
+
+                  setNewLessonFile(file);
+
+                  if (file && !newLessonTitle.trim()) {
+                    setNewLessonTitle(titleFromFilename(file.name));
+                  }
+                }}
+              />
+            </label>
+          ) : (
+            <label className="new-lesson-field">
+              <span>{newLessonSourceType === "youtube" ? "YouTube URL" : "Server audio path"}</span>
+              <input
+                value={newLessonSource}
+                onChange={(event) => setNewLessonSource(event.target.value)}
+                placeholder={
+                  newLessonSourceType === "youtube"
+                    ? "https://www.youtube.com/watch?v=..."
+                    : "data/processed/yt-MZter9IuEO4/input.wav"
+                }
+              />
+            </label>
+          )}
+
+            {newLessonError && (
+              <p className="new-lesson-error">{newLessonError}</p>
+            )}
+
+            <div className="new-lesson-actions">
+              <button
+                type="button"
+                className="secondary-control"
+                onClick={() => setIsNewLessonOpen(false)}
+                disabled={newLessonStatus === "running"}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className="primary-control"
+                onClick={handleCreateNewLesson}
+                disabled={newLessonStatus === "running"}
+              >
+                {newLessonStatus === "running" ? "Processing..." : "Create lesson"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
         <section className={`lesson-stage ${stageStateClass} view-mode-${viewMode}`}>
           {viewMode === "blocks" && (

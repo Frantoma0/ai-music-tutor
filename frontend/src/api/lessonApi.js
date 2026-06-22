@@ -38,3 +38,131 @@ export function mapLessonNotesToUiNotes(notes = []) {
     };
   });
 }
+export async function fetchPipelineRuns(limit = 20) {
+  const response = await fetch(`${API_BASE_URL}/api/tools/list_pipeline_runs/execute`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      payload: { limit },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch pipeline runs: ${response.status}`);
+  }
+
+  const result = await response.json();
+
+  if (result.status !== "success") {
+    throw new Error(result.error || "Pipeline runs request failed");
+  }
+
+  return result.data?.runs ?? [];
+}
+
+export function dedupeRunsByJobId(runs = []) {
+  const byJobId = new Map();
+
+  for (const run of runs) {
+    if (!run?.job_id || run.status !== "completed") {
+      continue;
+    }
+
+    if (!byJobId.has(run.job_id)) {
+      byJobId.set(run.job_id, run);
+    }
+  }
+
+  return Array.from(byJobId.values());
+}
+
+export function titleForRun(run, titleOverrides = {}) {
+  const override = titleOverrides[run?.job_id];
+
+  if (override?.trim()) {
+    return override.trim();
+  }
+
+  if (run?.session_title?.trim()) {
+    return run.session_title.trim();
+  }
+
+  if (run?.source) {
+    const filename = run.source.split("/").pop();
+
+    if (filename) {
+      return filename.replace(/\.[^.]+$/, "");
+    }
+  }
+
+  return run?.job_id || "Untitled lesson";
+}
+
+export async function runAudioToAnalysis(payload) {
+  const response = await fetch(`${API_BASE_URL}/api/tools/run_audio_to_analysis/execute`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      payload,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to run audio analysis: ${response.status}`);
+  }
+
+  const result = await response.json();
+
+  if (result.status !== "success") {
+    throw new Error(result.error || result.data?.error || "Audio analysis failed");
+  }
+
+  return result.data;
+}
+
+export function makeJobIdFromTitle(title) {
+  const cleaned = title
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9а-я]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+
+  return `${cleaned || "lesson"}-${Date.now().toString(36)}`;
+}
+
+export async function uploadAudioFile({ file, jobId }) {
+  const formData = new FormData();
+
+  formData.append("job_id", jobId);
+  formData.append("file", file);
+
+  const response = await fetch(`${API_BASE_URL}/api/uploads/audio`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to upload audio file: ${response.status} ${errorText}`);
+  }
+
+  const result = await response.json();
+
+  if (result.status !== "success") {
+    throw new Error(result.detail || "Audio upload failed");
+  }
+
+  return result;
+}
+
+export function titleFromFilename(filename = "") {
+  return filename
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_-]+/g, " ")
+    .trim();
+}

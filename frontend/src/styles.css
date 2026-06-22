@@ -5762,3 +5762,122 @@ main.app-shell {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+
+.new-lesson-modal-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: grid;
+  place-items: center;
+}
+
+.new-lesson-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(24, 18, 48, 0.22);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+}
+
+.new-lesson-modal {
+  position: relative;
+  z-index: 1;
+  width: min(520px, calc(100vw - 32px));
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border-radius: 30px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.97), rgba(247, 240, 255, 0.95));
+  border: 1px solid rgba(128, 91, 206, 0.18);
+  box-shadow:
+    0 30px 90px rgba(42, 30, 92, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.84);
+}
+
+.new-lesson-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.new-lesson-modal-header h2 {
+  margin: 0;
+  color: #33275f;
+  font-size: 1.45rem;
+  font-weight: 950;
+  letter-spacing: -0.04em;
+}
+
+.new-lesson-field {
+  display: grid;
+  gap: 7px;
+  color: #675985;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.new-lesson-field input {
+  width: 100%;
+  border: 1px solid rgba(128, 91, 206, 0.18);
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.68);
+  color: #33275f;
+  font: inherit;
+  outline: none;
+}
+
+.new-lesson-field input:focus {
+  border-color: rgba(154, 106, 226, 0.52);
+  box-shadow: 0 0 0 4px rgba(154, 106, 226, 0.13);
+}
+
+.new-lesson-source-tabs {
+  display: flex;
+  gap: 7px;
+  padding: 6px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.42);
+  border: 1px solid rgba(128, 91, 206, 0.12);
+}
+
+.new-lesson-source-tabs button {
+  flex: 1;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  padding: 10px 12px;
+  background: transparent;
+  color: #6b5c89;
+  font-size: 0.78rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.new-lesson-source-tabs button.active {
+  background: rgba(255, 255, 255, 0.84);
+  border-color: rgba(154, 106, 226, 0.34);
+  color: #33275f;
+  box-shadow: 0 8px 18px rgba(104, 75, 168, 0.1);
+}
+
+.new-lesson-source-tabs button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.new-lesson-error {
+  margin: 0;
+  color: #a33464;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.new-lesson-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}

@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.tools import router as tools_router
 from app.api.lessons import router as lessons_router
+from app.api.uploads import router as uploads_router
 from app.api.ws import router as ws_router
 from app.db.database import DEFAULT_DB_PATH, initialize_database
 
@@ -31,6 +32,7 @@ app.add_middleware(
 
 app.include_router(tools_router)
 app.include_router(lessons_router)
+app.include_router(uploads_router)
 app.include_router(ws_router)
 
 
