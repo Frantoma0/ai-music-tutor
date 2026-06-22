@@ -10,13 +10,69 @@ import { PianoKeyboard } from "./components/PianoKeyboard";
 import { WaterfallCanvas } from "./components/WaterfallCanvas";
 import SheetPreview from "./components/SheetPreview.jsx";
 import { demoNotes } from "./lib/demoNotes";
-import { DEFAULT_LESSON_JOB_ID, fetchLesson, mapLessonNotesToUiNotes } from "./api/lessonApi";
+import {
+  DEFAULT_LESSON_JOB_ID,
+  dedupeRunsByJobId,
+  fetchLesson,
+  fetchPipelineRuns,
+  mapLessonNotesToUiNotes,
+  titleForRun,
+} from "./api/lessonApi";
 
 const FALLBACK_DURATION_SECONDS = 4.2;
 
 
 function midiToToneNote(midiPitch) {
   return Tone.Frequency(midiPitch, "midi").toNote();
+}
+
+function MenuIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M4 7h16M4 12h16M4 17h16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M4.5 19.5 8.2 18.7 18.7 8.2a2.1 2.1 0 0 0 0-3l-.9-.9a2.1 2.1 0 0 0-3 0L4.3 14.8 3.5 18.5c-.1.6.4 1.1 1 1Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="m13.7 5.4 4.9 4.9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M7 7l10 10M17 7 7 17"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }
 
 function App() {
@@ -27,6 +83,16 @@ function App() {
   const [keyboardLabelMode, setKeyboardLabelMode] = useState("c-only");
   const [viewMode, setViewMode] = useState("blocks");
   const [activeHand, setActiveHand] = React.useState("both");
+  const [currentLessonJobId, setCurrentLessonJobId] = useState(DEFAULT_LESSON_JOB_ID);
+  const [pipelineRuns, setPipelineRuns] = useState([]);
+  const [isSessionsOpen, setIsSessionsOpen] = useState(false);
+  const [titleOverrides, setTitleOverrides] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("lessonTitleOverrides") || "{}");
+    } catch {
+      return {};
+    }
+  });
   const [lesson, setLesson] = useState(null);
   const [lessonNotes, setLessonNotes] = useState(demoNotes);
   const [lessonLoadStatus, setLessonLoadStatus] = useState("loading");
@@ -36,7 +102,15 @@ function App() {
     Number(lessonMeta.duration_s) ||
     Math.max(...lessonNotes.map((note) => Number(note.end ?? 0)), FALLBACK_DURATION_SECONDS);
 
-  const lessonTitle = lessonMeta.title || "Morning Light";
+  const activePipelineRun = pipelineRuns.find(
+    (run) => run.job_id === currentLessonJobId
+  );
+
+  const lessonTitle =
+    titleOverrides[currentLessonJobId] ||
+    lessonMeta.title ||
+    activePipelineRun?.session_title ||
+    "Morning Light";
   const lessonSubtitle = lesson
     ? `${lessonMeta.transcription_method || "Demo lesson"} · ${lessonMeta.detected_key || "Unknown key"} · ${lessonMeta.time_signature || "4/4"}`
     : "Demo lesson · C Major · 4/4";
@@ -66,6 +140,31 @@ function App() {
   const lastFrameRef = useRef(null);
   const synthRef = useRef(null);
   const triggeredNotesRef = useRef(new Set());
+  useEffect(() => {
+      localStorage.setItem("lessonTitleOverrides", JSON.stringify(titleOverrides));
+    }, [titleOverrides]);
+
+    useEffect(() => {
+    let cancelled = false;
+
+    async function loadPipelineRuns() {
+      try {
+        const runs = await fetchPipelineRuns(20);
+
+        if (cancelled) return;
+
+        setPipelineRuns(dedupeRunsByJobId(runs));
+      } catch (error) {
+        console.warn("Failed to load saved lessons:", error);
+      }
+    }
+
+    loadPipelineRuns();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // useEffect(() => {
   //   const reverb = new Tone.Reverb({
@@ -186,13 +285,17 @@ function App() {
 
     async function loadLesson() {
       try {
-        const loadedLesson = await fetchLesson(DEFAULT_LESSON_JOB_ID);
+        const loadedLesson = await fetchLesson(currentLessonJobId);
 
         if (cancelled) return;
 
         setLesson(loadedLesson);
         setLessonNotes(mapLessonNotesToUiNotes(loadedLesson.notes));
         setLessonLoadStatus("loaded");
+        lastFrameRef.current = null;
+        triggeredNotesRef.current.clear();
+        setIsPlaying(false);
+        setCurrentTime(0);
       } catch (error) {
         if (cancelled) return;
 
@@ -208,7 +311,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [currentLessonJobId]);
 
   function triggerNotesBetween(previousMusicalTime, nextMusicalTime) {
     const synth = synthRef.current;
@@ -312,34 +415,71 @@ function App() {
     lastFrameRef.current = null;
   }
 
+  function handleSelectLesson(jobId) {
+  if (!jobId) return;
+
+  setCurrentLessonJobId(jobId);
+  setIsSessionsOpen(false);
+  }
+
+ function handleRenameLessonByJobId(jobId, currentTitle) {
+  if (!jobId) return;
+
+  const nextTitle = window.prompt("Lesson name", currentTitle);
+
+  if (nextTitle === null) {
+    return;
+  }
+
+  const cleanedTitle = nextTitle.trim();
+
+  if (!cleanedTitle) {
+    return;
+  }
+
+  setTitleOverrides((previous) => ({
+    ...previous,
+    [jobId]: cleanedTitle,
+  }));
+}
+
+function handleRenameLesson() {
+  handleRenameLessonByJobId(currentLessonJobId, lessonTitle);
+}
+
   const stageStateClass = isPlaying ? "is-playing" : "";
 return (
     <main className="app-shell">
       <section className="lesson-layout">
-        <header className="top-player-bar">
+      <header className="top-player-bar">
           <div className="top-left">
-            <button className="back-button" aria-label="Back">
-              <svg
-                className="back-arrow-icon"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                focusable="false"
-              >
-                <path
-                  d="M14.8 6.5 9.3 12l5.5 5.5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+            <button
+              type="button"
+              className="menu-button"
+              aria-label="Open menu"
+              onClick={() => setIsSessionsOpen(true)}
+            >
+              <MenuIcon />
             </button>
 
-            <div>
+            <div className="lesson-heading-block">
               <p className="eyebrow">AI Music Tutor</p>
-              <h1 className="lesson-title">{lessonTitle}</h1>
+
+              <div className="lesson-title-row">
+                <h1 className="lesson-title">{lessonTitle}</h1>
+
+                <button
+                  type="button"
+                  className="title-edit-button"
+                  aria-label="Rename current lesson"
+                  onClick={handleRenameLesson}
+                >
+                  <PencilIcon />
+                </button>
+              </div>
+
               <p className="lesson-subtitle">{lessonSubtitle}</p>
+
               {lessonLoadStatus === "fallback" && (
                 <p className="lesson-load-status">Using local fallback notes</p>
               )}
@@ -402,6 +542,144 @@ return (
             </div>
           </div>
         </header>
+
+            {isSessionsOpen && (
+          <div className="sessions-drawer-layer" aria-label="Application menu">
+            <button
+              type="button"
+              className="sessions-drawer-backdrop"
+              aria-label="Close menu"
+              onClick={() => setIsSessionsOpen(false)}
+            />
+
+            <aside className="sessions-drawer" role="dialog" aria-label="Application menu">
+              <div className="sessions-drawer-header">
+                <div>
+                  <p className="sessions-drawer-eyebrow">AI Music Tutor</p>
+                  <h2>Menu</h2>
+                </div>
+
+                <button
+                  type="button"
+                  className="sessions-close-button"
+                  aria-label="Close menu"
+                  onClick={() => setIsSessionsOpen(false)}
+                >
+                  <CloseIcon />
+                </button>
+              </div>
+
+              <section className="drawer-section">
+                <div className="drawer-section-header">
+                  <span>Current lesson</span>
+                </div>
+
+                <div className="sessions-current-card">
+                  <div className="sessions-current-title-row">
+                    <strong>{lessonTitle}</strong>
+
+                    <button
+                      type="button"
+                      className="sessions-pencil-button"
+                      aria-label="Rename current lesson"
+                      onClick={handleRenameLesson}
+                    >
+                      <PencilIcon />
+                    </button>
+                  </div>
+
+                  <span className="sessions-current-meta">
+                    {lessonMeta.detected_key || activePipelineRun?.detected_key || "Unknown key"} ·{" "}
+                    {lessonNotes.length} notes ·{" "}
+                    {lessonMeta.transcription_method || activePipelineRun?.transcription_method || "unknown"}
+                  </span>
+                </div>
+              </section>
+
+              <section className="drawer-section drawer-section-flex">
+                <div className="drawer-section-header">
+                  <span>Saved lessons</span>
+                  <strong>{pipelineRuns.length}</strong>
+                </div>
+
+                <div className="sessions-list">
+                  {pipelineRuns.map((run) => {
+                    const runTitle = titleForRun(run, titleOverrides);
+                    const isActive = run.job_id === currentLessonJobId;
+
+                    return (
+                      <div
+                        key={`${run.id}-${run.job_id}`}
+                        className={`session-list-item ${isActive ? "active" : ""}`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => handleSelectLesson(run.job_id)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            handleSelectLesson(run.job_id);
+                          }
+                        }}
+                      >
+                        <div className="session-list-main">
+                          <strong>{runTitle}</strong>
+                          <span>
+                            {run.detected_key || "Unknown key"} · {run.note_count ?? 0} notes ·{" "}
+                            {run.transcription_method || "unknown"}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="session-item-edit-button"
+                          aria-label={`Rename ${runTitle}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleRenameLessonByJobId(run.job_id, runTitle);
+                          }}
+                        >
+                          <PencilIcon />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className="drawer-section">
+                <div className="drawer-section-header">
+                  <span>Quick actions</span>
+                </div>
+
+                <div className="drawer-action-grid">
+                  <button type="button" className="drawer-action-button" disabled>
+                    + New lesson
+                  </button>
+
+                  <button type="button" className="drawer-action-button" disabled>
+                    Upload file
+                  </button>
+
+                  <button type="button" className="drawer-action-button" disabled>
+                    YouTube link
+                  </button>
+                </div>
+              </section>
+
+              <section className="drawer-section">
+                <div className="drawer-section-header">
+                  <span>Settings</span>
+                </div>
+
+                <div className="drawer-settings-list">
+                  <span>Display: {noteDisplayMode === "letters" ? "A–G" : noteDisplayMode}</span>
+                  <span>Keys: {keyboardLabelMode === "c-only" ? "C only" : keyboardLabelMode}</span>
+                  <span>Hands: {activeHand}</span>
+                </div>
+              </section>
+            </aside>
+          </div>
+        )}
 
         <section className={`lesson-stage ${stageStateClass} view-mode-${viewMode}`}>
           {viewMode === "blocks" && (
