@@ -107,6 +107,7 @@ function App() {
   const [newLessonSource, setNewLessonSource] = useState("");
   const [newLessonStatus, setNewLessonStatus] = useState("idle");
   const [newLessonError, setNewLessonError] = useState("");
+  const [newLessonStep, setNewLessonStep] = useState("");
 
   const lessonMeta = lesson?.meta ?? {};
   const lessonDurationSeconds =
@@ -480,8 +481,18 @@ async function waitForLesson(jobId, attempts = 10) {
   throw lastError || new Error(`Lesson ${jobId} was not available yet.`);
 }
 
+function resetNewLessonForm(sourceType = "youtube") {
+  setNewLessonTitle("");
+  setNewLessonSource("");
+  setNewLessonFile(null);
+  setNewLessonSourceType(sourceType);
+  setNewLessonStatus("idle");
+  setNewLessonStep("");
+  setNewLessonError("");
+}
+
 async function handleCreateNewLesson() {
-  const title = newLessonTitle.trim();
+  const title = (newLessonTitle ?? "").trim();
 
   if (!title) {
     setNewLessonError("Please enter a lesson title.");
@@ -490,7 +501,7 @@ async function handleCreateNewLesson() {
 
   const jobId = makeJobIdFromTitle(title);
 
-  let source = newLessonSource.trim();
+  let source = (newLessonSource ?? "").trim();
 
   if (newLessonSourceType === "upload") {
     if (!newLessonFile) {
@@ -503,10 +514,13 @@ async function handleCreateNewLesson() {
   }
 
   setNewLessonStatus("running");
+  setNewLessonStep("Preparing lesson...");
   setNewLessonError("");
 
   try {
     if (newLessonSourceType === "upload") {
+      setNewLessonStep("Uploading audio file...");
+
       const uploadResult = await uploadAudioFile({
         file: newLessonFile,
         jobId,
@@ -514,6 +528,8 @@ async function handleCreateNewLesson() {
 
       source = uploadResult.path;
     }
+
+    setNewLessonStep("Running AI transcription and analysis...");
 
     await runAudioToAnalysis({
       source,
@@ -526,12 +542,16 @@ async function handleCreateNewLesson() {
       session_title: title,
     });
 
+    setNewLessonStep("Saving lesson...");
+
     setTitleOverrides((previous) => ({
       ...previous,
       [jobId]: title,
     }));
 
     await refreshPipelineRuns();
+
+    setNewLessonStep("Loading lesson...");
 
     const loadedLesson = await waitForLesson(jobId);
 
@@ -540,11 +560,11 @@ async function handleCreateNewLesson() {
     setLessonLoadStatus("loaded");
 
     setCurrentLessonJobId(jobId);
-    setIsNewLessonOpen(false);
-    setNewLessonTitle("");
-    setNewLessonSource("");
-    setNewLessonFile(null);
+
+    setNewLessonStep("Done!");
     setNewLessonStatus("idle");
+    setIsNewLessonOpen(false);
+    resetNewLessonForm("youtube");
     setIsSessionsOpen(false);
 
     lastFrameRef.current = null;
@@ -553,6 +573,7 @@ async function handleCreateNewLesson() {
     setCurrentTime(0);
   } catch (error) {
     setNewLessonStatus("error");
+    setNewLessonStep("");
     setNewLessonError(error.message || "Failed to create lesson.");
   }
 }
@@ -766,12 +787,7 @@ return (
                     type="button"
                     className="drawer-action-button"
                     onClick={() => {
-                      setNewLessonTitle("");
-                      setNewLessonSource("");
-                      setNewLessonFile(null);
-                      setNewLessonSourceType("youtube");
-                      setNewLessonError("");
-                      setNewLessonStatus("idle");
+                      resetNewLessonForm("youtube");
                       setIsNewLessonOpen(true);
                     }}
                   >
@@ -843,10 +859,7 @@ return (
                 type="button"
                 className={newLessonSourceType === "youtube" ? "active" : ""}
                 onClick={() => {
-                  setNewLessonSourceType("youtube");
-                  setNewLessonSource("");
-                  setNewLessonFile(null);
-                  setNewLessonError("");
+                  resetNewLessonForm("youtube");
                 }}
               >
                 YouTube URL
@@ -856,11 +869,8 @@ return (
                 type="button"
                 className={newLessonSourceType === "local" ? "active" : ""}
                 onClick={() => {
-                setNewLessonSourceType("local");
-                setNewLessonSource("");
-                setNewLessonFile(null);
-                setNewLessonError("");
-              }}
+                  resetNewLessonForm("local");
+                }}
               >
                 Local path
               </button>
@@ -869,11 +879,8 @@ return (
                 type="button"
                 className={newLessonSourceType === "upload" ? "active" : ""}
                 onClick={() => {
-                setNewLessonSourceType("upload");
-                setNewLessonSource("");
-                setNewLessonFile(null);
-                setNewLessonError("");
-              }}
+                  resetNewLessonForm("upload");
+                }}
               >
                 Upload file
               </button>
@@ -899,7 +906,7 @@ return (
           ) : (
             <label className="new-lesson-field">
               <span>{newLessonSourceType === "youtube" ? "YouTube URL" : "Server audio path"}</span>
-              <input
+             <input
                 value={newLessonSource ?? ""}
                 onChange={(event) => setNewLessonSource(event.target.value ?? "")}
                 placeholder={
@@ -910,6 +917,17 @@ return (
               />
             </label>
           )}
+
+            {newLessonStatus === "running" && (
+              <div className="new-lesson-processing-panel">
+                <div className="new-lesson-processing-spinner" aria-hidden="true" />
+
+                <div>
+                  <strong>Processing lesson</strong>
+                  <span>{newLessonStep || "Working..."}</span>
+                </div>
+              </div>
+            )}
 
             {newLessonError && (
               <p className="new-lesson-error">{newLessonError}</p>
@@ -931,7 +949,7 @@ return (
                 onClick={handleCreateNewLesson}
                 disabled={newLessonStatus === "running"}
               >
-                {newLessonStatus === "running" ? "Processing..." : "Create lesson"}
+                {newLessonStatus === "running" ? "Working..." : "Create lesson"}
               </button>
             </div>
           </section>

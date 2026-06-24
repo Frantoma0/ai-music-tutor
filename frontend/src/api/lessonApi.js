@@ -161,8 +161,22 @@ export async function uploadAudioFile({ file, jobId }) {
 }
 
 export function titleFromFilename(filename = "") {
-  return filename
-    .replace(/\.[^.]+$/, "")
+  const withoutExtension = filename.replace(/\.[^.]+$/, "");
+
+  const withoutLeadingId = withoutExtension.replace(/^\d+[-_\s]+/, "");
+
+  const cleaned = withoutLeadingId
     .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
+
+  if (!cleaned) {
+    return "Uploaded lesson";
+  }
+
+  const shortTitle = cleaned.length > 72
+    ? `${cleaned.slice(0, 72).trim()}...`
+    : cleaned;
+
+  return shortTitle.replace(/\b\w/g, (char) => char.toUpperCase());
 }
