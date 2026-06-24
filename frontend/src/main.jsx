@@ -465,6 +465,21 @@ function handleRenameLesson() {
   handleRenameLessonByJobId(currentLessonJobId, lessonTitle);
 }
 
+async function waitForLesson(jobId, attempts = 10) {
+  let lastError = null;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await fetchLesson(jobId);
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+  }
+
+  throw lastError || new Error(`Lesson ${jobId} was not available yet.`);
+}
+
 async function handleCreateNewLesson() {
   const title = newLessonTitle.trim();
 
@@ -507,6 +522,8 @@ async function handleCreateNewLesson() {
       stems_dir: "data/stems",
       artifacts_dir: "data/midi",
       use_basic_pitch: true,
+      persist: true,
+      session_title: title,
     });
 
     setTitleOverrides((previous) => ({
@@ -516,6 +533,12 @@ async function handleCreateNewLesson() {
 
     await refreshPipelineRuns();
 
+    const loadedLesson = await waitForLesson(jobId);
+
+    setLesson(loadedLesson);
+    setLessonNotes(mapLessonNotesToUiNotes(loadedLesson.notes));
+    setLessonLoadStatus("loaded");
+
     setCurrentLessonJobId(jobId);
     setIsNewLessonOpen(false);
     setNewLessonTitle("");
@@ -523,6 +546,11 @@ async function handleCreateNewLesson() {
     setNewLessonFile(null);
     setNewLessonStatus("idle");
     setIsSessionsOpen(false);
+
+    lastFrameRef.current = null;
+    triggeredNotesRef.current.clear();
+    setIsPlaying(false);
+    setCurrentTime(0);
   } catch (error) {
     setNewLessonStatus("error");
     setNewLessonError(error.message || "Failed to create lesson.");
@@ -740,6 +768,7 @@ return (
                     onClick={() => {
                       setNewLessonTitle("");
                       setNewLessonSource("");
+                      setNewLessonFile(null);
                       setNewLessonSourceType("youtube");
                       setNewLessonError("");
                       setNewLessonStatus("idle");
@@ -803,9 +832,9 @@ return (
             <label className="new-lesson-field">
               <span>Lesson title</span>
               <input
-                value={newLessonTitle}
-                onChange={(event) => setNewLessonTitle(event.target.value)}
-                placeholder="Long Live"
+                value={newLessonTitle ?? ""}
+                onChange={(event) => setNewLessonTitle(event.target.value ?? "")}
+                placeholder="Lesson title"
               />
             </label>
 
@@ -813,7 +842,12 @@ return (
               <button
                 type="button"
                 className={newLessonSourceType === "youtube" ? "active" : ""}
-                onClick={() => setNewLessonSourceType("youtube")}
+                onClick={() => {
+                  setNewLessonSourceType("youtube");
+                  setNewLessonSource("");
+                  setNewLessonFile(null);
+                  setNewLessonError("");
+                }}
               >
                 YouTube URL
               </button>
@@ -821,7 +855,12 @@ return (
               <button
                 type="button"
                 className={newLessonSourceType === "local" ? "active" : ""}
-                onClick={() => setNewLessonSourceType("local")}
+                onClick={() => {
+                setNewLessonSourceType("local");
+                setNewLessonSource("");
+                setNewLessonFile(null);
+                setNewLessonError("");
+              }}
               >
                 Local path
               </button>
@@ -829,7 +868,12 @@ return (
               <button
                 type="button"
                 className={newLessonSourceType === "upload" ? "active" : ""}
-                onClick={() => setNewLessonSourceType("upload")}
+                onClick={() => {
+                setNewLessonSourceType("upload");
+                setNewLessonSource("");
+                setNewLessonFile(null);
+                setNewLessonError("");
+              }}
               >
                 Upload file
               </button>
@@ -856,8 +900,8 @@ return (
             <label className="new-lesson-field">
               <span>{newLessonSourceType === "youtube" ? "YouTube URL" : "Server audio path"}</span>
               <input
-                value={newLessonSource}
-                onChange={(event) => setNewLessonSource(event.target.value)}
+                value={newLessonSource ?? ""}
+                onChange={(event) => setNewLessonSource(event.target.value ?? "")}
                 placeholder={
                   newLessonSourceType === "youtube"
                     ? "https://www.youtube.com/watch?v=..."
