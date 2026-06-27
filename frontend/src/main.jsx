@@ -11,6 +11,10 @@ import { WaterfallCanvas } from "./components/WaterfallCanvas";
 import SheetPreview from "./components/SheetPreview.jsx";
 import { demoNotes } from "./lib/demoNotes";
 import {
+  buildPracticeNotes,
+  getPracticeNoteStats,
+} from "./lib/practiceNotes";
+import {
   DEFAULT_LESSON_JOB_ID,
   dedupeRunsByJobId,
   fetchLesson,
@@ -87,6 +91,7 @@ function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [tempo, setTempo] = useState(1);
   const [noteDisplayMode, setNoteDisplayMode] = useState("letters");
+  const [noteViewMode, setNoteViewMode] = useState("practice");
   const [keyboardLabelMode, setKeyboardLabelMode] = useState("c-only");
   const [viewMode, setViewMode] = useState("blocks");
   const [activeHand, setActiveHand] = React.useState("both");
@@ -136,12 +141,23 @@ function App() {
 
   const musicalTime = currentTime * tempo;
 
+  const practiceLessonNotes = React.useMemo(() => {
+    return buildPracticeNotes(lessonNotes);
+  }, [lessonNotes]);
+
+  const displayedLessonNotes =
+    noteViewMode === "practice" ? practiceLessonNotes : lessonNotes;
+
+  const practiceNoteStats = React.useMemo(() => {
+    return getPracticeNoteStats(lessonNotes, practiceLessonNotes);
+  }, [lessonNotes, practiceLessonNotes]);
+
   const visibleLessonNotes = React.useMemo(() => {
-    return lessonNotes.filter((note) => {
+    return displayedLessonNotes.filter((note) => {
       if (activeHand === "both") return true;
       return note.hand === activeHand;
     });
-  }, [lessonNotes, activeHand]);
+  }, [displayedLessonNotes, activeHand]);
 
   const progressPercent = Math.max(
     0,
@@ -1272,7 +1288,27 @@ return (
               </button>
             </div>
           </div>
+        <div className="mini-control-pill" aria-label="Note view mode">
+          <span className="mini-mode-label">Notes</span>
 
+          <div className="mini-mode-switch">
+            <button
+              type="button"
+              className={noteViewMode === "raw" ? "active" : ""}
+              onClick={() => setNoteViewMode("raw")}
+            >
+              Raw
+            </button>
+
+            <button
+              type="button"
+              className={noteViewMode === "practice" ? "active" : ""}
+              onClick={() => setNoteViewMode("practice")}
+            >
+              Practice
+            </button>
+          </div>
+        </div>
           <div className="mini-control-pill" aria-label="Keyboard label mode">
             <span className="mini-mode-label">Keys</span>
 
