@@ -233,3 +233,9 @@ export function titleFromYouTubeUrl(url = "") {
     return "";
   }
 }
+
+export function isGeneratedYouTubeTitle(title = "", url = "") {
+  const generatedTitle = titleFromYouTubeUrl(url);
+
+  return Boolean(generatedTitle) && title.trim() === generatedTitle.trim();
+}

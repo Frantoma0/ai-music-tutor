@@ -15,6 +15,7 @@ import {
   dedupeRunsByJobId,
   fetchLesson,
   fetchPipelineRuns,
+  isGeneratedYouTubeTitle,
   makeJobIdFromTitle,
   mapLessonNotesToUiNotes,
   runAudioToAnalysis,
@@ -537,14 +538,21 @@ async function handleCreateNewLesson() {
     if (newLessonSourceType === "youtube") {
       setNewLessonStep("Downloading YouTube audio...");
 
+      const shouldUseRemoteTitle =
+        !title || isGeneratedYouTubeTitle(title, source);
+
       const youtubeResult = await uploadYoutubeAudio({
         url: source,
         jobId,
       });
 
       source = youtubeResult.path;
-    }
 
+      if (youtubeResult.title && shouldUseRemoteTitle) {
+        title = youtubeResult.title.trim();
+        setNewLessonTitle(title);
+      }
+    }
     setNewLessonStep("Running AI transcription and analysis...");
 
     await runAudioToAnalysis({
