@@ -395,6 +395,11 @@ class RunAudioToAnalysisTool(MCPTool):
                         "description": "Stem to pass to the transcription stage.",
                         "default": "other",
                     },
+                    "skip_separation": {
+                        "type": "boolean",
+                        "description": "Skip Demucs source separation and transcribe the normalized WAV directly.",
+                        "default": False,
+                    },
                     "persist": {
                         "type": "boolean",
                         "description": "Persist the completed pipeline result to SQLite.",
@@ -465,6 +470,7 @@ class RunAudioToAnalysisTool(MCPTool):
             artifacts_dir=payload.get("artifacts_dir", "artifacts/tracer"),
             use_basic_pitch=bool(payload.get("use_basic_pitch", True)),
             selected_stem=payload.get("selected_stem", "other"),
+            skip_separation=bool(payload.get("skip_separation", False)),
         )
 
         data = result.to_dict()

@@ -132,14 +132,15 @@ def run_audio_to_analysis_pipeline(
     artifacts_dir: str | Path = "artifacts/tracer",
     use_basic_pitch: bool = True,
     selected_stem: str = "other",
+    skip_separation: bool = False,
 ) -> AudioToAnalysisPipelineResult:
     """
     Day 6 orchestrator:
 
     source audio
     -> T1 extract_audio
-    -> T2 separate_sources
-    -> separation quality analysis
+    -> optional T2 separate_sources
+    -> optional separation quality analysis
     -> adaptive transcription audio selection
     -> T3 tracer analysis
     -> final JSON-compatible result
@@ -178,41 +179,67 @@ def run_audio_to_analysis_pipeline(
                 error=extract_result.error,
             )
 
-        separation_result: SourceSeparationResult = separate_sources(
-            wav_path=extract_result.wav_path,
-            output_dir=stems_dir,
-            job_id=job_id,
-            selected_stem=selected_stem,
-        )
+        if skip_separation:
+            transcription_audio_path = str(extract_result.wav_path)
 
-        separation_data = separation_result.to_dict()
+            separation_data = {
+                "job_id": job_id,
+                "input_wav": str(extract_result.wav_path),
+                "output_dir": str(stems_dir),
+                "model_name": None,
+                "stems": {},
+                "selected_stem": "original",
+                "selected_stem_path": str(extract_result.wav_path),
+                "status": "skipped",
+                "error": None,
+            }
 
-        if separation_result.status != "completed":
-            return AudioToAnalysisPipelineResult(
+            separation_quality_data = {
+                "status": "skipped",
+                "input_wav": str(extract_result.wav_path),
+                "selected_stem": "original",
+                "selected_stem_path": str(extract_result.wav_path),
+                "decision": "prefer_original_wav",
+                "recommended_audio_path": str(extract_result.wav_path),
+                "likely_solo_piano": True,
+                "reason": "Source separation skipped for piano-focused transcription.",
+            }
+        else:
+            separation_result: SourceSeparationResult = separate_sources(
+                wav_path=extract_result.wav_path,
+                output_dir=stems_dir,
                 job_id=job_id,
-                source=source_str,
-                status="error",
-                extract=extract_data,
-                separation=separation_data,
-                separation_quality=_empty_quality(),
-                transcription=empty_transcription,
-                analysis=empty_analysis,
-                final_audio_path=None,
-                midi_path=None,
-                detected_key=None,
-                hvs_score=None,
-                error=separation_result.error,
+                selected_stem=selected_stem,
             )
 
-        separation_quality_data = _analyze_separation_quality_safely(
-            extract_result=extract_result,
-            separation_result=separation_result,
-        )
+            separation_data = separation_result.to_dict()
 
-        transcription_audio_path = _choose_transcription_audio_path(
-            separation_result=separation_result,
-            separation_quality_data=separation_quality_data,
-        )
+            if separation_result.status != "completed":
+                return AudioToAnalysisPipelineResult(
+                    job_id=job_id,
+                    source=source_str,
+                    status="error",
+                    extract=extract_data,
+                    separation=separation_data,
+                    separation_quality=_empty_quality(),
+                    transcription=empty_transcription,
+                    analysis=empty_analysis,
+                    final_audio_path=None,
+                    midi_path=None,
+                    detected_key=None,
+                    hvs_score=None,
+                    error=separation_result.error,
+                )
+
+            separation_quality_data = _analyze_separation_quality_safely(
+                extract_result=extract_result,
+                separation_result=separation_result,
+            )
+
+            transcription_audio_path = _choose_transcription_audio_path(
+                separation_result=separation_result,
+                separation_quality_data=separation_quality_data,
+            )
 
         tracer_result: TracerBulletResult = run_tracer_bullet(
             audio_path=transcription_audio_path,
