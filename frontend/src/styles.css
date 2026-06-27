@@ -5924,3 +5924,10 @@ main.app-shell {
     transform: rotate(360deg);
   }
 }
+
+.new-lesson-field-hint {
+  color: #8a78ad;
+  font-size: 0.7rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
