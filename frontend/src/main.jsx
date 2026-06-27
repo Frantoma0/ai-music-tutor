@@ -92,6 +92,7 @@ function App() {
   const [activeHand, setActiveHand] = React.useState("both");
   const [currentLessonJobId, setCurrentLessonJobId] = useState(DEFAULT_LESSON_JOB_ID);
   const [pipelineRuns, setPipelineRuns] = useState([]);
+  const [screenMode, setScreenMode] = useState("home");
   const [isSessionsOpen, setIsSessionsOpen] = useState(false);
   const [titleOverrides, setTitleOverrides] = useState(() => {
     try {
@@ -121,6 +122,8 @@ function App() {
   const activePipelineRun = pipelineRuns.find(
     (run) => run.job_id === currentLessonJobId
   );
+
+  const latestPipelineRun = pipelineRuns[0] ?? null;
 
   const lessonTitle =
     titleOverrides[currentLessonJobId] ||
@@ -441,8 +444,9 @@ function App() {
   function handleSelectLesson(jobId) {
   if (!jobId) return;
 
-  setCurrentLessonJobId(jobId);
-  setIsSessionsOpen(false);
+    setCurrentLessonJobId(jobId);
+    setScreenMode("lesson");
+    setIsSessionsOpen(false);
   }
 
  function handleRenameLessonByJobId(jobId, currentTitle) {
@@ -586,6 +590,7 @@ async function handleCreateNewLesson() {
     setLessonLoadStatus("loaded");
 
     setCurrentLessonJobId(jobId);
+    setScreenMode("lesson");
 
     setNewLessonStep("Done!");
     setNewLessonStatus("idle");
@@ -608,6 +613,7 @@ async function handleCreateNewLesson() {
 return (
     <main className="app-shell">
       <section className="lesson-layout">
+        {screenMode === "lesson" && (
       <header className="top-player-bar">
           <div className="top-left">
             <button
@@ -617,6 +623,18 @@ return (
               onClick={() => setIsSessionsOpen(true)}
             >
               <MenuIcon />
+            </button>
+
+            <button
+              type="button"
+              className="library-button"
+              onClick={() => {
+                setScreenMode("home");
+                setIsSessionsOpen(false);
+                setIsPlaying(false);
+              }}
+            >
+              Library
             </button>
 
             <div className="lesson-heading-block">
@@ -699,7 +717,48 @@ return (
             </div>
           </div>
         </header>
+        )}
+        {screenMode === "home" && (
+      <header className="home-app-header">
+        <div className="home-brand-block">
+          <div className="home-logo-slot" aria-label="AI Music Tutor logo">
+            <span>AMT</span>
+          </div>
 
+          <div>
+            <p className="eyebrow">Local-first piano tutor</p>
+            <h1>AI Music Tutor</h1>
+            <span>Create, continue, and manage your piano lessons.</span>
+          </div>
+        </div>
+
+        <div className="home-header-actions">
+          <button
+            type="button"
+            className="secondary-control"
+            disabled={!latestPipelineRun}
+            onClick={() => {
+              if (latestPipelineRun?.job_id) {
+                handleSelectLesson(latestPipelineRun.job_id);
+              }
+            }}
+          >
+            Continue latest
+          </button>
+
+          <button
+            type="button"
+            className="primary-control"
+            onClick={() => {
+              resetNewLessonForm("youtube");
+              setIsNewLessonOpen(true);
+            }}
+          >
+            + New lesson
+          </button>
+        </div>
+      </header>
+    )}
             {isSessionsOpen && (
           <div className="sessions-drawer-layer" aria-label="Application menu">
             <button
@@ -1007,6 +1066,106 @@ return (
         </div>
       )}
 
+      {screenMode === "home" && (
+        <section className="home-screen">
+          <div className="home-hero-card">
+            <div className="home-hero-copy">
+              <p className="eyebrow">Quick start</p>
+              <h1>Your piano lesson library</h1>
+              <p>
+                Paste a YouTube link or upload an audio file to create a local interactive piano lesson.
+              </p>
+            </div>
+
+            <div className="home-quick-create">
+              <div className="home-youtube-row">
+                <input
+                  value={newLessonSourceType === "youtube" ? newLessonSource ?? "" : ""}
+                  onChange={(event) => {
+                    const value = event.target.value ?? "";
+
+                    setNewLessonSourceType("youtube");
+                    setNewLessonSource(value);
+
+                    if (newLessonTitleSource === "auto") {
+                      const inferredTitle = titleFromYouTubeUrl(value);
+
+                      if (inferredTitle) {
+                        setNewLessonTitle(inferredTitle);
+                      }
+                    }
+                  }}
+                  placeholder="Paste YouTube link..."
+                />
+
+                <button
+                  type="button"
+                  className="primary-control"
+                  onClick={() => {
+                    setNewLessonSourceType("youtube");
+                    setIsNewLessonOpen(true);
+                  }}
+                >
+                  Add →
+                </button>
+              </div>
+
+              <button
+                type="button"
+                className="home-upload-button"
+                onClick={() => {
+                  resetNewLessonForm("upload");
+                  setIsNewLessonOpen(true);
+                }}
+              >
+                Upload MP3 / WAV
+              </button>
+            </div>
+          </div>
+
+          <section className="home-library-section">
+            <div className="home-section-header">
+              <div>
+                <p className="eyebrow">Library</p>
+                <h2>Your lessons</h2>
+              </div>
+
+              <span>{pipelineRuns.length} saved</span>
+            </div>
+
+            <div className="home-lessons-grid">
+              {pipelineRuns.map((run) => {
+                const runTitle = titleForRun(run, titleOverrides);
+
+                return (
+                  <button
+                    type="button"
+                    key={`${run.id}-${run.job_id}`}
+                    className="home-lesson-card"
+                    onClick={() => handleSelectLesson(run.job_id)}
+                  >
+                    <div className="home-lesson-thumbnail" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+
+                    <strong>{runTitle}</strong>
+
+                    <span>
+                      {run.detected_key || "Unknown key"} · {run.note_count ?? 0} notes
+                    </span>
+
+                    <small>{run.transcription_method || "unknown"}</small>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        </section>
+      )}
+        {screenMode === "lesson" && (
         <section className={`lesson-stage ${stageStateClass} view-mode-${viewMode}`}>
           {viewMode === "blocks" && (
             <>
@@ -1058,7 +1217,8 @@ return (
             </>
           )}
         </section>
-
+        )}
+        {screenMode === "lesson" && (
         <footer className="controls-card">
           <div className="transport-group">
             <button className="primary-control" onClick={togglePlayback}>
@@ -1157,6 +1317,7 @@ return (
             {currentTime.toFixed(2)}s
           </div>
         </footer>
+        )}
       </section>
     </main>
   );

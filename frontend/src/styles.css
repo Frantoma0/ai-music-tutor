@@ -5931,3 +5931,306 @@ main.app-shell {
   font-weight: 750;
   line-height: 1.35;
 }
+
+.home-screen {
+  display: grid;
+  gap: 22px;
+  padding: 10px 0 26px;
+}
+
+.home-hero-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.8fr);
+  gap: 26px;
+  align-items: center;
+  padding: 24px 28px;
+  border-radius: 34px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(246, 235, 255, 0.74)),
+    radial-gradient(circle at 20% 20%, rgba(154, 106, 226, 0.22), transparent 34%),
+    radial-gradient(circle at 88% 12%, rgba(255, 149, 202, 0.2), transparent 38%);
+  border: 1px solid rgba(128, 91, 206, 0.18);
+  box-shadow:
+    0 28px 70px rgba(42, 30, 92, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.home-hero-copy h1 {
+  margin: 0;
+  color: #33275f;
+  font-size: clamp(2rem, 4vw, 4.2rem);
+  line-height: 0.95;
+  letter-spacing: -0.07em;
+  font-weight: 950;
+}
+
+.home-hero-copy p:not(.eyebrow) {
+  max-width: 560px;
+  margin: 14px 0 0;
+  color: #74658f;
+  font-size: 1rem;
+  line-height: 1.55;
+  font-weight: 750;
+}
+
+.home-quick-create {
+  display: grid;
+  gap: 12px;
+}
+
+.home-youtube-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(128, 91, 206, 0.16);
+}
+
+.home-youtube-row input {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: #33275f;
+  padding: 0 10px;
+  font: inherit;
+  font-weight: 850;
+  outline: none;
+}
+
+.home-youtube-row input::placeholder {
+  color: #9a8bb8;
+}
+
+.home-upload-button {
+  width: 100%;
+  border: 1px dashed rgba(128, 91, 206, 0.34);
+  border-radius: 20px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.48);
+  color: #5f5181;
+  font-size: 0.9rem;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.home-actions-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.home-library-section {
+  display: grid;
+  gap: 14px;
+}
+
+.home-section-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.home-section-header h2 {
+  margin: 0;
+  color: #33275f;
+  font-size: 1.4rem;
+  letter-spacing: -0.04em;
+}
+
+.home-section-header span {
+  color: #74658f;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.home-lessons-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
+  gap: 14px;
+}
+
+.home-lesson-card {
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  border: 1px solid rgba(128, 91, 206, 0.16);
+  border-radius: 24px;
+  padding: 14px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.72), rgba(244, 235, 255, 0.62));
+  color: #33275f;
+  cursor: pointer;
+  box-shadow: 0 14px 34px rgba(42, 30, 92, 0.08);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.home-lesson-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(154, 106, 226, 0.38);
+  box-shadow: 0 22px 44px rgba(42, 30, 92, 0.14);
+}
+
+.home-lesson-thumbnail {
+  height: 72px;
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(30, 27, 72, 0.95), rgba(74, 35, 101, 0.9));
+  overflow: hidden;
+}
+
+.home-lesson-thumbnail span {
+  width: 18px;
+  border-radius: 999px 999px 8px 8px;
+  background: linear-gradient(180deg, rgba(180, 210, 255, 0.96), rgba(180, 128, 220, 0.86));
+  box-shadow: 0 0 16px rgba(180, 210, 255, 0.5);
+}
+
+.home-lesson-thumbnail span:nth-child(1) {
+  height: 30px;
+}
+
+.home-lesson-thumbnail span:nth-child(2) {
+  height: 52px;
+}
+
+.home-lesson-thumbnail span:nth-child(3) {
+  height: 40px;
+}
+
+.home-lesson-thumbnail span:nth-child(4) {
+  height: 62px;
+}
+
+.home-lesson-card strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.95rem;
+  font-weight: 950;
+}
+
+.home-lesson-card span,
+.home-lesson-card small {
+  color: #74658f;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+@media (max-width: 900px) {
+  .home-hero-card {
+    grid-template-columns: 1fr;
+  }
+}
+
+.home-app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 22px;
+  border-radius: 32px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.74), rgba(246, 235, 255, 0.58)),
+    radial-gradient(circle at 8% 12%, rgba(154, 106, 226, 0.14), transparent 36%),
+    radial-gradient(circle at 92% 8%, rgba(255, 149, 202, 0.14), transparent 34%);
+  border: 1px solid rgba(128, 91, 206, 0.16);
+  box-shadow:
+    0 22px 58px rgba(42, 30, 92, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.home-brand-block {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.home-logo-slot {
+  width: 72px;
+  height: 72px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, rgba(54, 42, 105, 0.96), rgba(160, 92, 220, 0.86)),
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.42), transparent 34%);
+  color: white;
+  box-shadow:
+    0 18px 34px rgba(80, 54, 150, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.home-logo-slot span {
+  font-size: 0.9rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+}
+
+.home-brand-block h1 {
+  margin: 0;
+  color: #33275f;
+  font-size: clamp(1.45rem, 2.4vw, 2.25rem);
+  line-height: 1;
+  letter-spacing: -0.055em;
+  font-weight: 950;
+}
+
+.home-brand-block span {
+  display: block;
+  margin-top: 5px;
+  color: #74658f;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.home-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.library-button {
+  height: 42px;
+  padding: 0 16px;
+  border: 1px solid rgba(128, 91, 206, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.58);
+  color: #5f5181;
+  font-size: 0.78rem;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.library-button:hover {
+  background: rgba(255, 255, 255, 0.84);
+  border-color: rgba(128, 91, 206, 0.32);
+}
+
+@media (max-width: 850px) {
+  .home-app-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .home-header-actions {
+    width: 100%;
+  }
+
+  .home-header-actions .primary-control,
+  .home-header-actions .secondary-control {
+    flex: 1;
+  }
+}
