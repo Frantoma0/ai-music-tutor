@@ -105,6 +105,7 @@ function App() {
   const [lessonLoadStatus, setLessonLoadStatus] = useState("loading");
   const [isNewLessonOpen, setIsNewLessonOpen] = useState(false);
   const [newLessonTitle, setNewLessonTitle] = useState("");
+  const [newLessonTitleSource, setNewLessonTitleSource] = useState("auto");
   const [newLessonSourceType, setNewLessonSourceType] = useState("youtube");
   const [newLessonFile, setNewLessonFile] = useState(null);
   const [newLessonSource, setNewLessonSource] = useState("");
@@ -486,6 +487,7 @@ async function waitForLesson(jobId, attempts = 10) {
 
 function resetNewLessonForm(sourceType = "youtube") {
   setNewLessonTitle("");
+  setNewLessonTitleSource("auto");
   setNewLessonSource("");
   setNewLessonFile(null);
   setNewLessonSourceType(sourceType);
@@ -538,8 +540,7 @@ async function handleCreateNewLesson() {
     if (newLessonSourceType === "youtube") {
       setNewLessonStep("Downloading YouTube audio...");
 
-      const shouldUseRemoteTitle =
-        !title || isGeneratedYouTubeTitle(title, source);
+      const shouldUseRemoteTitle = newLessonTitleSource === "auto";
 
       const youtubeResult = await uploadYoutubeAudio({
         url: source,
@@ -872,11 +873,21 @@ return (
 
             <label className="new-lesson-field">
               <span>Lesson title</span>
+
               <input
                 value={newLessonTitle ?? ""}
-                onChange={(event) => setNewLessonTitle(event.target.value ?? "")}
-                placeholder="Lesson title"
+                onChange={(event) => {
+                  setNewLessonTitle(event.target.value ?? "");
+                  setNewLessonTitleSource("user");
+                }}
+                placeholder="Title"
               />
+
+              <small className="new-lesson-field-hint">
+                {newLessonTitleSource === "auto"
+                  ? "Title can be filled automatically from YouTube metadata."
+                  : "Custom title will be kept."}
+              </small>
             </label>
 
             <div className="new-lesson-source-tabs">
@@ -932,26 +943,29 @@ return (
             <label className="new-lesson-field">
               <span>{newLessonSourceType === "youtube" ? "YouTube URL" : "Server audio path"}</span>
              <input
-              value={newLessonSource ?? ""}
-              onChange={(event) => {
-                const value = event.target.value ?? "";
+                value={newLessonSource ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value ?? "";
 
-                setNewLessonSource(value);
+                  setNewLessonSource(value);
 
-                if (newLessonSourceType === "youtube" && !newLessonTitle.trim()) {
-                  const inferredTitle = titleFromYouTubeUrl(value);
+                  if (
+                    newLessonSourceType === "youtube" &&
+                    newLessonTitleSource === "auto"
+                  ) {
+                    const inferredTitle = titleFromYouTubeUrl(value);
 
-                  if (inferredTitle) {
-                    setNewLessonTitle(inferredTitle);
+                    if (inferredTitle) {
+                      setNewLessonTitle(inferredTitle);
+                    }
                   }
+                }}
+                placeholder={
+                  newLessonSourceType === "youtube"
+                    ? "https://www.youtube.com/watch?v=..."
+                    : "data/processed/yt-MZter9IuEO4/input.wav"
                 }
-              }}
-              placeholder={
-                newLessonSourceType === "youtube"
-                  ? "https://www.youtube.com/watch?v=..."
-                  : "data/processed/yt-MZter9IuEO4/input.wav"
-              }
-            />
+              />
             </label>
           )}
 
