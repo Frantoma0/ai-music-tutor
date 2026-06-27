@@ -180,3 +180,56 @@ export function titleFromFilename(filename = "") {
 
   return shortTitle.replace(/\b\w/g, (char) => char.toUpperCase());
 }
+
+export async function uploadYoutubeAudio({ url, jobId }) {
+  const response = await fetch(`${API_BASE_URL}/api/uploads/youtube`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      url,
+      job_id: jobId,
+    }),
+  });
+
+  if (!response.ok) {
+    let message = `Failed to process YouTube URL: ${response.status}`;
+
+    try {
+      const errorData = await response.json();
+
+      if (errorData?.detail) {
+        message = errorData.detail;
+      }
+    } catch {
+      const errorText = await response.text();
+      if (errorText) {
+        message = errorText;
+      }
+    }
+
+    throw new Error(message);
+  }
+
+  const result = await response.json();
+
+  if (result.status !== "success") {
+    throw new Error(result.detail || "YouTube audio processing failed");
+  }
+
+  return result;
+}
+
+export function titleFromYouTubeUrl(url = "") {
+  try {
+    const parsedUrl = new URL(url);
+    const videoId =
+      parsedUrl.searchParams.get("v") ||
+      parsedUrl.pathname.split("/").filter(Boolean).pop();
+
+    return videoId ? `YouTube ${videoId}` : "";
+  } catch {
+    return "";
+  }
+}

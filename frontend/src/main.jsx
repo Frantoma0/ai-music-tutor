@@ -20,7 +20,9 @@ import {
   runAudioToAnalysis,
   titleForRun,
   titleFromFilename,
+  titleFromYouTubeUrl,
   uploadAudioFile,
+  uploadYoutubeAudio,
 } from "./api/lessonApi";
 
 const FALLBACK_DURATION_SECONDS = 4.2;
@@ -492,7 +494,12 @@ function resetNewLessonForm(sourceType = "youtube") {
 }
 
 async function handleCreateNewLesson() {
-  const title = (newLessonTitle ?? "").trim();
+  let title = (newLessonTitle ?? "").trim();
+  let source = (newLessonSource ?? "").trim();
+
+  if (newLessonSourceType === "youtube" && !title && source) {
+    title = titleFromYouTubeUrl(source);
+  }
 
   if (!title) {
     setNewLessonError("Please enter a lesson title.");
@@ -500,8 +507,6 @@ async function handleCreateNewLesson() {
   }
 
   const jobId = makeJobIdFromTitle(title);
-
-  let source = (newLessonSource ?? "").trim();
 
   if (newLessonSourceType === "upload") {
     if (!newLessonFile) {
@@ -529,6 +534,17 @@ async function handleCreateNewLesson() {
       source = uploadResult.path;
     }
 
+    if (newLessonSourceType === "youtube") {
+      setNewLessonStep("Downloading YouTube audio...");
+
+      const youtubeResult = await uploadYoutubeAudio({
+        url: source,
+        jobId,
+      });
+
+      source = youtubeResult.path;
+    }
+
     setNewLessonStep("Running AI transcription and analysis...");
 
     await runAudioToAnalysis({
@@ -536,8 +552,9 @@ async function handleCreateNewLesson() {
       job_id: jobId,
       processed_dir: "data/processed",
       stems_dir: "data/stems",
-      artifacts_dir: "data/midi",
+      artifacts_dir: "artifacts/tracer",
       use_basic_pitch: true,
+      skip_separation: true,
       persist: true,
       session_title: title,
     });
@@ -907,14 +924,26 @@ return (
             <label className="new-lesson-field">
               <span>{newLessonSourceType === "youtube" ? "YouTube URL" : "Server audio path"}</span>
              <input
-                value={newLessonSource ?? ""}
-                onChange={(event) => setNewLessonSource(event.target.value ?? "")}
-                placeholder={
-                  newLessonSourceType === "youtube"
-                    ? "https://www.youtube.com/watch?v=..."
-                    : "data/processed/yt-MZter9IuEO4/input.wav"
+              value={newLessonSource ?? ""}
+              onChange={(event) => {
+                const value = event.target.value ?? "";
+
+                setNewLessonSource(value);
+
+                if (newLessonSourceType === "youtube" && !newLessonTitle.trim()) {
+                  const inferredTitle = titleFromYouTubeUrl(value);
+
+                  if (inferredTitle) {
+                    setNewLessonTitle(inferredTitle);
+                  }
                 }
-              />
+              }}
+              placeholder={
+                newLessonSourceType === "youtube"
+                  ? "https://www.youtube.com/watch?v=..."
+                  : "data/processed/yt-MZter9IuEO4/input.wav"
+              }
+            />
             </label>
           )}
 
