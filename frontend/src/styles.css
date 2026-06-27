@@ -6234,3 +6234,122 @@ main.app-shell {
     flex: 1;
   }
 }
+
+.controls-card-polished {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  overflow-x: auto;
+}
+
+.controls-card-polished::-webkit-scrollbar {
+  height: 6px;
+}
+
+.controls-card-polished::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(128, 91, 206, 0.22);
+}
+
+.controls-transport-section {
+  flex: 0 0 auto;
+}
+
+.controls-tempo-section {
+  flex: 0 1 300px;
+  min-width: 250px;
+}
+
+.controls-card-polished .mini-control-pill {
+  flex: 0 0 auto;
+  min-height: 62px;
+}
+
+.controls-card-polished .mini-mode-label {
+  white-space: nowrap;
+}
+
+.controls-status-section {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.compact-confidence-pill,
+.compact-time-pill {
+  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  border: 1px solid rgba(128, 91, 206, 0.15);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(246, 238, 255, 0.56));
+  color: #5f5181;
+  box-shadow:
+    0 10px 24px rgba(80, 67, 140, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.compact-confidence-pill {
+  gap: 8px;
+  padding: 0 13px;
+  font-size: 0.76rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.compact-confidence-pill strong {
+  color: #3f326d;
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.compact-confidence-icon {
+  width: 20px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1.5px dashed rgba(128, 91, 206, 0.42);
+  color: #7b67a9;
+  font-size: 0.68rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.compact-time-pill {
+  min-width: 70px;
+  padding: 0 13px;
+  color: #3f326d;
+  font-size: 0.82rem;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1180px) {
+  .controls-status-section {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .controls-card-polished {
+    align-items: stretch;
+  }
+
+  .controls-tempo-section {
+    min-width: 220px;
+  }
+
+  .compact-confidence-pill span:not(.compact-confidence-icon) {
+    display: none;
+  }
+
+  .compact-confidence-pill {
+    padding: 0 10px;
+  }
+}

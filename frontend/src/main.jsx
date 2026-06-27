@@ -172,6 +172,14 @@ function App() {
     (note) => note.confidence === null || note.confidence === undefined
   ).length;
 
+  const lowConfidenceCount = lessonNotes.filter((note) => {
+    if (note.confidence === null || note.confidence === undefined) {
+      return false;
+    }
+
+    return Number(note.confidence) < 0.7;
+  }).length;
+
   const lastFrameRef = useRef(null);
   const synthRef = useRef(null);
   const triggeredNotesRef = useRef(new Set());
@@ -1235,8 +1243,8 @@ return (
         </section>
         )}
         {screenMode === "lesson" && (
-        <footer className="controls-card">
-          <div className="transport-group">
+        <footer className="controls-card controls-card-polished">
+          <div className="transport-group controls-transport-section">
             <button className="primary-control" onClick={togglePlayback}>
               {isPlaying ? "Pause" : "Play"}
             </button>
@@ -1246,8 +1254,9 @@ return (
             </button>
           </div>
 
-          <label className="tempo-control">
+          <label className="tempo-control controls-tempo-section">
             <span>Tempo</span>
+
             <input
               type="range"
               min="0.25"
@@ -1256,10 +1265,11 @@ return (
               value={tempo}
               onChange={handleTempoChange}
             />
+
             <strong>{Math.round(tempo * 100)}%</strong>
           </label>
 
-        <div className="mini-control-pill" aria-label="Note display mode">
+          <div className="mini-control-pill" aria-label="Note display mode">
             <span className="mini-mode-label">Display</span>
 
             <div className="mini-mode-switch">
@@ -1288,27 +1298,29 @@ return (
               </button>
             </div>
           </div>
-        <div className="mini-control-pill" aria-label="Note view mode">
-          <span className="mini-mode-label">Notes</span>
 
-          <div className="mini-mode-switch">
-            <button
-              type="button"
-              className={noteViewMode === "raw" ? "active" : ""}
-              onClick={() => setNoteViewMode("raw")}
-            >
-              Raw
-            </button>
+          <div className="mini-control-pill" aria-label="Note view mode">
+            <span className="mini-mode-label">Notes</span>
 
-            <button
-              type="button"
-              className={noteViewMode === "practice" ? "active" : ""}
-              onClick={() => setNoteViewMode("practice")}
-            >
-              Practice
-            </button>
+            <div className="mini-mode-switch">
+              <button
+                type="button"
+                className={noteViewMode === "raw" ? "active" : ""}
+                onClick={() => setNoteViewMode("raw")}
+              >
+                Raw
+              </button>
+
+              <button
+                type="button"
+                className={noteViewMode === "practice" ? "active" : ""}
+                onClick={() => setNoteViewMode("practice")}
+              >
+                Practice
+              </button>
+            </div>
           </div>
-        </div>
+
           <div className="mini-control-pill" aria-label="Keyboard label mode">
             <span className="mini-mode-label">Keys</span>
 
@@ -1344,13 +1356,24 @@ return (
             onChange={setActiveHand}
           />
 
-          <div className="confidence-legend">
-          <span className="confidence-block-indicator" aria-hidden="true" />
-          <span>Low confidence</span>
-        </div>
+          <div className="controls-status-section">
+            <div
+              className="compact-confidence-pill"
+              title={`${lowConfidenceCount} low confidence notes`}
+              aria-label={`${lowConfidenceCount} low confidence notes`}
+            >
+              <span className="compact-confidence-icon" aria-hidden="true">
+                !
+              </span>
 
-          <div className="time-readout">
-            {currentTime.toFixed(2)}s
+              <span>Low conf.</span>
+
+              <strong>{lowConfidenceCount}</strong>
+            </div>
+
+            <div className="compact-time-pill">
+              {currentTime.toFixed(2)}s
+            </div>
           </div>
         </footer>
         )}
