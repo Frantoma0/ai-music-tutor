@@ -6403,3 +6403,122 @@ main.app-shell {
     display: none;
   }
 }
+
+.controls-card-polished {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-inline: 20px;
+  overflow-x: auto;
+}
+
+/* Transport да остане компактно */
+.controls-transport-section {
+  flex: 0 0 auto;
+}
+
+/* Tempo да не изяжда прекалено място */
+.controls-tempo-section {
+  flex: 0 0 320px;
+  min-width: 300px;
+}
+
+/* Трите основни секции да се разширят повече */
+.display-pill,
+.notes-pill,
+.keys-pill {
+  flex: 1.25 0 240px;
+  min-width: 240px;
+  max-width: 310px;
+  justify-content: space-between;
+}
+
+/* Вътрешните бутони вдясно */
+.display-pill .mini-mode-switch,
+.notes-pill .mini-mode-switch,
+.keys-pill .mini-mode-switch {
+  margin-left: auto;
+}
+
+/* Hands да не се свива */
+.hands-pill-wrapper,
+.controls-card-polished .hands-control,
+.controls-card-polished .hand-control {
+  flex: 0 0 auto;
+}
+
+/* Status секцията да има реално място */
+.controls-status-section {
+  flex: 0 0 250px;
+  min-width: 250px;
+  margin-left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* Low confidence легендата да не се реже */
+.compact-confidence-pill {
+  flex: 0 0 175px;
+  min-width: 175px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding-inline: 12px;
+  white-space: nowrap;
+}
+
+/* Времето да е стабилно вдясно */
+.compact-time-pill {
+  flex: 0 0 70px;
+  min-width: 70px;
+}
+
+/* Легендата да е компактна, но четима */
+.compact-confidence-pill span:last-child {
+  overflow: visible;
+  text-overflow: unset;
+  white-space: nowrap;
+}
+
+/* Малко по-компактни бутони вътре, за да не се задушава лентата */
+.controls-card-polished .mini-mode-switch button {
+  padding-inline: 12px;
+}
+
+/* На средни екрани позволяваме scroll, вместо грозно смачкване */
+@media (max-width: 1450px) {
+  .display-pill,
+  .notes-pill,
+  .keys-pill {
+    flex-basis: 225px;
+    min-width: 225px;
+  }
+
+  .controls-tempo-section {
+    flex-basis: 285px;
+    min-width: 285px;
+  }
+
+  .controls-status-section {
+    flex-basis: 235px;
+    min-width: 235px;
+  }
+
+  .compact-confidence-pill {
+    flex-basis: 165px;
+    min-width: 165px;
+  }
+}
+
+.black-key-row {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.black-key {
+  position: absolute;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+}

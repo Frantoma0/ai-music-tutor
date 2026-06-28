@@ -9,8 +9,10 @@ import {
 
 const BLACK_PITCH_CLASSES = new Set([1, 3, 6, 8, 10]);
 
+const BLACK_KEY_WIDTH_RATIO = 0.08;
+
 function isBlackKey(pitch) {
-  return BLACK_PITCH_CLASSES.has(pitch % 12);
+  return BLACK_PITCH_CLASSES.has(Number(pitch) % 12);
 }
 
 function isInCorrectionMask(note) {
@@ -61,18 +63,27 @@ function keyClassName(pitch, activeByPitch) {
 }
 
 function shouldShowKeyLabel(pitch, labelMode) {
-    if (labelMode === "off") {
-      return false;
-    }
-
-    if (labelMode === "all") {
-      return true;
-    }
-
-    return pitch % 12 === 0;
+  if (labelMode === "off") {
+    return false;
   }
 
-  export function PianoKeyboard({ notes, musicalTime = 0, labelMode = "c-only" }) {
+  if (labelMode === "all") {
+    return true;
+  }
+
+  return Number(pitch) % 12 === 0;
+}
+
+function blackKeyStyle(whiteSlot, whiteKeyCount) {
+  const centerPercent = ((whiteSlot + 1) / whiteKeyCount) * 100;
+
+  return {
+    left: `${centerPercent}%`,
+    width: `calc((100% / ${whiteKeyCount}) * 0.52)`,
+  };
+}
+
+export function PianoKeyboard({ notes, musicalTime = 0, labelMode = "c-only" }) {
   const activeNotes = activeNotesAtTime(notes, musicalTime);
   const activeByPitch = new Map();
 
@@ -108,10 +119,10 @@ function shouldShowKeyLabel(pitch, labelMode) {
           return (
             <div key={pitch} className={keyClassName(pitch, activeByPitch)}>
               {shouldShowKeyLabel(pitch, labelMode) && (
-            <span className="key-label">
-              {pitchName(pitch)}
-            </span>
-          )}
+                <span className="key-label">
+                  {pitchName(pitch)}
+                </span>
+              )}
             </div>
           );
         })}
@@ -126,20 +137,18 @@ function shouldShowKeyLabel(pitch, labelMode) {
             return null;
           }
 
-          const leftPercent = ((whiteSlot + 0.72) / whitePitches.length) * 100;
-
           return (
             <div
-            key={pitch}
-            className={keyClassName(pitch, activeByPitch)}
-            style={{ left: `${leftPercent}%` }}
-          >
-            {shouldShowKeyLabel(pitch, labelMode) && (
-              <span className="key-label black-label">
-                {pitchName(pitch)}
-              </span>
-            )}
-          </div>
+              key={pitch}
+              className={keyClassName(pitch, activeByPitch)}
+              style={blackKeyStyle(whiteSlot, whitePitches.length)}
+            >
+              {shouldShowKeyLabel(pitch, labelMode) && (
+                <span className="key-label black-label">
+                  {pitchName(pitch)}
+                </span>
+              )}
+            </div>
           );
         })}
       </div>
