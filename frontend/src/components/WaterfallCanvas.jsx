@@ -32,6 +32,11 @@ const PIXELS_PER_SECOND = 140;
 const NOTE_WIDTH = 22;
 const NOTE_VISUAL_Y_OFFSET = 10;
 const HIT_LINE_Y_RATIO = 0.985;
+const RAW_MIN_NOTE_HEIGHT = 8;
+const PRACTICE_MIN_NOTE_HEIGHT = 18;
+const PRACTICE_CONNECTOR_MAX_GAP_SECONDS = 0.045;
+const PRACTICE_CONNECTOR_MIN_GAP_SECONDS = 0.004;
+const PRACTICE_CONNECTOR_WIDTH = 8;
 
 function notePalette(note) {
   const hand = note.hand === "left" || note.hand === "right"
@@ -295,13 +300,154 @@ function drawSubtleBaseGlow(ctx, x, y, color, intensity = 1) {
   ctx.restore();
 }
 
-function drawNote(ctx, note, width, hitLineY, musicalTime, noteDisplayMode) {
+function noteTimeToY(time, hitLineY, musicalTime) {
+  return hitLineY - (time - musicalTime) * PIXELS_PER_SECOND + NOTE_VISUAL_Y_OFFSET;
+}
+
+function notesCanHavePracticeConnector(previousNote, currentNote) {
+  if (!previousNote || !currentNote) {
+    return false;
+  }
+
+  if (Number(previousNote.pitch) !== Number(currentNote.pitch)) {
+    return false;
+  }
+
+  const previousHand = previousNote.hand ?? "unknown";
+  const currentHand = currentNote.hand ?? "unknown";
+
+  const handsCompatible =
+    previousHand === currentHand ||
+    previousHand === "unknown" ||
+    currentHand === "unknown";
+
+  if (!handsCompatible) {
+    return false;
+  }
+
+  const previousEnd = Number(previousNote.end ?? previousNote.start ?? 0);
+  const currentStart = Number(currentNote.start ?? 0);
+  const gap = currentStart - previousEnd;
+
+  return (
+    gap >= PRACTICE_CONNECTOR_MIN_GAP_SECONDS &&
+    gap <= PRACTICE_CONNECTOR_MAX_GAP_SECONDS
+  );
+}
+
+function drawPracticeConnector(ctx, previousNote, currentNote, width, hitLineY, musicalTime) {
+  const x = pitchToX(currentNote.pitch, width);
+
+  const previousEnd = Number(previousNote.end ?? previousNote.start ?? 0);
+  const currentStart = Number(currentNote.start ?? 0);
+
+  const yPreviousEnd = noteTimeToY(previousEnd, hitLineY, musicalTime);
+  const yCurrentStart = noteTimeToY(currentStart, hitLineY, musicalTime);
+
+  const connectorTop = Math.min(yPreviousEnd, yCurrentStart);
+  const connectorBottom = Math.max(yPreviousEnd, yCurrentStart);
+  const connectorHeight = Math.max(connectorBottom - connectorTop, 3);
+
+  if (connectorTop > hitLineY + 120 || connectorBottom < -80) {
+    return;
+  }
+
+  const palette = notePalette(currentNote);
+  const rectX = x - PRACTICE_CONNECTOR_WIDTH / 2;
+
+  ctx.save();
+
+  ctx.globalAlpha = 0.42;
+  ctx.strokeStyle = palette.stroke;
+  ctx.lineWidth = 1.4;
+  ctx.setLineDash([3, 3]);
+  ctx.shadowColor = palette.glow;
+  ctx.shadowBlur = 5;
+
+  drawRoundedRect(
+    ctx,
+    rectX,
+    connectorTop,
+    PRACTICE_CONNECTOR_WIDTH,
+    connectorHeight,
+    999
+  );
+
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+
+  // Small seam marker: shows that this is a visual hint, not a merged note.
+  ctx.globalAlpha = 0.72;
+  ctx.beginPath();
+  ctx.moveTo(x - 7, yCurrentStart);
+  ctx.lineTo(x + 7, yCurrentStart);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.62)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawPracticeConnectors(ctx, notes, width, hitLineY, musicalTime) {
+  const sortedNotes = [...notes].sort((first, second) => {
+    const pitchDiff = Number(first.pitch) - Number(second.pitch);
+
+    if (pitchDiff !== 0) {
+      return pitchDiff;
+    }
+
+    return Number(first.start ?? 0) - Number(second.start ?? 0);
+  });
+
+  for (let index = 1; index < sortedNotes.length; index += 1) {
+    const previousNote = sortedNotes[index - 1];
+    const currentNote = sortedNotes[index];
+
+    if (notesCanHavePracticeConnector(previousNote, currentNote)) {
+      drawPracticeConnector(
+        ctx,
+        previousNote,
+        currentNote,
+        width,
+        hitLineY,
+        musicalTime
+      );
+    }
+  }
+}
+
+function drawNote(
+  ctx,
+  note,
+  width,
+  hitLineY,
+  musicalTime,
+  noteDisplayMode,
+  noteViewMode
+) {
   const x = pitchToX(note.pitch, width);
   const yTop = hitLineY - (note.start - musicalTime) * PIXELS_PER_SECOND + NOTE_VISUAL_Y_OFFSET;
   const yBottom = hitLineY - (note.end - musicalTime) * PIXELS_PER_SECOND + NOTE_VISUAL_Y_OFFSET;
 
-  const y = Math.min(yTop, yBottom);
-  const h = Math.max(Math.abs(yBottom - yTop), 34);
+  const realTopY = Math.min(yTop, yBottom);
+  const realBottomY = Math.max(yTop, yBottom);
+  const rawHeight = Math.abs(yBottom - yTop);
+
+  const minVisualHeight =
+    noteViewMode === "practice"
+      ? PRACTICE_MIN_NOTE_HEIGHT
+      : RAW_MIN_NOTE_HEIGHT;
+
+  const h = Math.max(rawHeight, minVisualHeight);
+
+  /*
+  * Important:
+  * Keep the bottom edge locked to the real note onset.
+  * If we increase the visual height, the block grows upward only.
+  * This improves readability without changing when the learner should press.
+  */
+  const y = realBottomY - h;
 
   if (y > hitLineY + 120 || y + h < -80) {
     return;
@@ -383,6 +529,7 @@ export function WaterfallCanvas({
   musicalTime,
   tempo,
   noteDisplayMode,
+  noteViewMode = "raw",
 }) {
   const canvasRef = useRef(null);
   const effectiveMusicalTime = musicalTime ?? currentTime * tempo;
@@ -496,12 +643,30 @@ export function WaterfallCanvas({
 
     drawKeyboardGuide(ctx, width, height);
 
+    if (noteViewMode === "practice") {
+      drawPracticeConnectors(
+        ctx,
+        notes,
+        width,
+        hitLineY,
+        effectiveMusicalTime
+      );
+    }
+
     for (const note of notes) {
-      drawNote(ctx, note, width, hitLineY, effectiveMusicalTime, noteDisplayMode);
+      drawNote(
+        ctx,
+        note,
+        width,
+        hitLineY,
+        effectiveMusicalTime,
+        noteDisplayMode,
+        noteViewMode
+      );
     }
 
     drawHitLine(ctx, width, hitLineY);
-  }, [notes, currentTime, effectiveMusicalTime, tempo, noteDisplayMode]);
+  }, [notes, currentTime, effectiveMusicalTime, tempo, noteDisplayMode, noteViewMode]);
 
   return <canvas ref={canvasRef} className="waterfall-canvas" />;
 }
