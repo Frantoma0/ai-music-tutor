@@ -6387,3 +6387,19 @@ main.app-shell {
     linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(240, 229, 255, 0.7));
   color: #4a3a78;
 }
+.notes-view-pill {
+  gap: 10px;
+}
+
+.notes-view-hint {
+  color: #8a78ad;
+  font-size: 0.68rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+@media (max-width: 1180px) {
+  .notes-view-hint {
+    display: none;
+  }
+}

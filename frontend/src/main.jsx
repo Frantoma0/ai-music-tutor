@@ -11,10 +11,6 @@ import { WaterfallCanvas } from "./components/WaterfallCanvas";
 import SheetPreview from "./components/SheetPreview.jsx";
 import { demoNotes } from "./lib/demoNotes";
 import {
-  buildPracticeNotes,
-  getPracticeNoteStats,
-} from "./lib/practiceNotes";
-import {
   DEFAULT_LESSON_JOB_ID,
   dedupeRunsByJobId,
   fetchLesson,
@@ -141,23 +137,17 @@ function App() {
 
   const musicalTime = currentTime * tempo;
 
-  const practiceLessonNotes = React.useMemo(() => {
-    return buildPracticeNotes(lessonNotes);
-  }, [lessonNotes]);
-
-  const displayedLessonNotes =
-    noteViewMode === "practice" ? practiceLessonNotes : lessonNotes;
-
-  const practiceNoteStats = React.useMemo(() => {
-    return getPracticeNoteStats(lessonNotes, practiceLessonNotes);
-  }, [lessonNotes, practiceLessonNotes]);
-
   const visibleLessonNotes = React.useMemo(() => {
-    return displayedLessonNotes.filter((note) => {
+    return lessonNotes.filter((note) => {
       if (activeHand === "both") return true;
       return note.hand === activeHand;
     });
-  }, [displayedLessonNotes, activeHand]);
+  }, [lessonNotes, activeHand]);
+
+  const noteViewHint =
+    noteViewMode === "practice"
+      ? "Practice view keeps original timing and only adds visual guidance."
+      : "Raw view shows the original transcription.";
 
   const progressPercent = Math.max(
     0,
@@ -1172,6 +1162,7 @@ return (
               <div className="waterfall-frame">
                 <WaterfallCanvas
                   notes={visibleLessonNotes}
+                  noteViewMode={noteViewMode}
                   currentTime={currentTime}
                   musicalTime={musicalTime}
                   tempo={tempo}
@@ -1200,6 +1191,7 @@ return (
               <div className="waterfall-frame mix-waterfall-frame">
                 <WaterfallCanvas
                   notes={visibleLessonNotes}
+                  noteViewMode={noteViewMode}
                   currentTime={currentTime}
                   musicalTime={musicalTime}
                   tempo={tempo}
@@ -1275,7 +1267,11 @@ return (
             </div>
           </div>
 
-          <div className="mini-control-pill" aria-label="Note view mode">
+          <div
+            className="mini-control-pill notes-view-pill"
+            aria-label="Note view mode"
+            title={noteViewHint}
+          >
             <span className="mini-mode-label">Notes</span>
 
             <div className="mini-mode-switch">
