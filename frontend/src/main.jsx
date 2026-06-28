@@ -171,15 +171,7 @@ function App() {
   const unknownConfidenceCount = lessonNotes.filter(
     (note) => note.confidence === null || note.confidence === undefined
   ).length;
-
-  const lowConfidenceCount = lessonNotes.filter((note) => {
-    if (note.confidence === null || note.confidence === undefined) {
-      return false;
-    }
-
-    return Number(note.confidence) < 0.7;
-  }).length;
-
+  
   const lastFrameRef = useRef(null);
   const synthRef = useRef(null);
   const triggeredNotesRef = useRef(new Set());
@@ -649,18 +641,6 @@ return (
               <MenuIcon />
             </button>
 
-            <button
-              type="button"
-              className="library-button"
-              onClick={() => {
-                setScreenMode("home");
-                setIsSessionsOpen(false);
-                setIsPlaying(false);
-              }}
-            >
-              Library
-            </button>
-
             <div className="lesson-heading-block">
               <p className="eyebrow">AI Music Tutor</p>
 
@@ -810,6 +790,21 @@ return (
               </div>
 
               <section className="drawer-section">
+                <button
+                  type="button"
+                  className="drawer-home-button"
+                  onClick={() => {
+                    setScreenMode("home");
+                    setIsSessionsOpen(false);
+                    setIsPlaying(false);
+                  }}
+                >
+                  <span>Home page</span>
+                  <small>Lesson library and quick start</small>
+                </button>
+              </section>
+
+              <section className="drawer-section">
                 <div className="drawer-section-header">
                   <span>Current lesson</span>
                 </div>
@@ -887,43 +882,24 @@ return (
               </section>
 
               <section className="drawer-section">
-                <div className="drawer-section-header">
-                  <span>Quick actions</span>
-                </div>
+                  <div className="drawer-section-header">
+                    <span>New lesson</span>
+                  </div>
 
-                <div className="drawer-action-grid">
-                  <button
-                    type="button"
-                    className="drawer-action-button"
-                    onClick={() => {
-                      resetNewLessonForm("youtube");
-                      setIsNewLessonOpen(true);
-                    }}
-                  >
-                    + New lesson
-                  </button>
+                  <div className="drawer-action-grid">
+                    <button
+                      type="button"
+                      className="drawer-action-button drawer-action-button-primary"
+                      onClick={() => {
+                        resetNewLessonForm("youtube");
+                        setIsNewLessonOpen(true);
+                      }}
+                    >
+                      + New lesson
+                    </button>
+                  </div>
+                </section>
 
-                  <button type="button" className="drawer-action-button" disabled>
-                    Upload file
-                  </button>
-
-                  <button type="button" className="drawer-action-button" disabled>
-                    YouTube link
-                  </button>
-                </div>
-              </section>
-
-              <section className="drawer-section">
-                <div className="drawer-section-header">
-                  <span>Settings</span>
-                </div>
-
-                <div className="drawer-settings-list">
-                  <span>Display: {noteDisplayMode === "letters" ? "A–G" : noteDisplayMode}</span>
-                  <span>Keys: {keyboardLabelMode === "c-only" ? "C only" : keyboardLabelMode}</span>
-                  <span>Hands: {activeHand}</span>
-                </div>
-              </section>
             </aside>
           </div>
         )}
@@ -1359,16 +1335,11 @@ return (
           <div className="controls-status-section">
             <div
               className="compact-confidence-pill"
-              title={`${lowConfidenceCount} low confidence notes`}
-              aria-label={`${lowConfidenceCount} low confidence notes`}
+              title="Dashed blocks show low confidence notes"
+              aria-label="Dashed blocks show low confidence notes"
             >
-              <span className="compact-confidence-icon" aria-hidden="true">
-                !
-              </span>
-
-              <span>Low conf.</span>
-
-              <strong>{lowConfidenceCount}</strong>
+              <span className="compact-confidence-sample" aria-hidden="true" />
+              <span>Low confidence</span>
             </div>
 
             <div className="compact-time-pill">
