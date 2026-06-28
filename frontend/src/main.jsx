@@ -13,6 +13,7 @@ import { demoNotes } from "./lib/demoNotes";
 import {
   DEFAULT_LESSON_JOB_ID,
   dedupeRunsByJobId,
+  deletePipelineRun,
   fetchLesson,
   fetchPipelineRuns,
   isGeneratedYouTubeTitle,
@@ -68,6 +69,43 @@ function PencilIcon() {
   );
 }
 
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M5 7h14"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M10 7V5.8C10 4.8 10.8 4 11.8 4h.4C13.2 4 14 4.8 14 5.8V7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M7.2 9.5l.7 8.1A2.6 2.6 0 0 0 10.5 20h3a2.6 2.6 0 0 0 2.6-2.4l.7-8.1"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M10.5 12v4.5M13.5 12v4.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function CloseIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -81,6 +119,16 @@ function CloseIcon() {
     </svg>
   );
 }
+
+function formatPlaybackTime(seconds = 0) {
+  const safeSeconds = Math.max(0, Number(seconds) || 0);
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = Math.floor(safeSeconds % 60);
+
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
+
 
 function App() {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -136,6 +184,37 @@ function App() {
     : "Demo lesson · C Major · 4/4";
 
   const musicalTime = currentTime * tempo;
+
+  const lessonDuration = React.useMemo(() => {
+    return lessonNotes.reduce((maxEnd, note) => {
+      const noteEnd = Number(note.end ?? note.start ?? 0);
+
+      if (!Number.isFinite(noteEnd)) {
+        return maxEnd;
+      }
+
+      return Math.max(maxEnd, noteEnd);
+    }, 0);
+  }, [lessonNotes]);
+
+  const seekToMusicalTime = React.useCallback(
+    (targetMusicalTime) => {
+      const safeTempo = Math.max(0.01, Number(tempo) || 1);
+
+      const clampedMusicalTime =
+        lessonDuration > 0
+          ? Math.min(Math.max(Number(targetMusicalTime) || 0, 0), lessonDuration)
+          : Math.max(Number(targetMusicalTime) || 0, 0);
+
+      setCurrentTime(clampedMusicalTime / safeTempo);
+    },
+    [lessonDuration, tempo]
+  );
+
+  const scrubberProgressPercent =
+    lessonDuration > 0
+      ? Math.min(100, Math.max(0, (musicalTime / lessonDuration) * 100))
+      : 0;
 
   const visibleLessonNotes = React.useMemo(() => {
     return lessonNotes.filter((note) => {
@@ -476,6 +555,45 @@ function App() {
   }));
 }
 
+async function handleDeleteLessonByJobId(jobId, title) {
+  if (!jobId) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Delete "${title}"?\n\nThis will remove it from your saved lessons.`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    await deletePipelineRun(jobId);
+
+    setTitleOverrides((previous) => {
+      const next = { ...previous };
+      delete next[jobId];
+      return next;
+    });
+
+    await refreshPipelineRuns();
+
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setIsSessionsOpen(false);
+    setScreenMode("home");
+
+    if (jobId === currentLessonJobId) {
+      setLesson(null);
+      setLessonNotes(demoNotes);
+      setLessonLoadStatus("fallback");
+    }
+  } catch (error) {
+    window.alert(error.message || "Failed to delete lesson.");
+  }
+}
+
 function handleRenameLesson() {
   handleRenameLessonByJobId(currentLessonJobId, lessonTitle);
 }
@@ -695,19 +813,41 @@ return (
           </div>
 
           <div className="top-right">
-            <div className="progress-pill">
-              <div className="progress-meta">
-                <span>Lesson Progress</span>
-                <strong>{progressPercent}%</strong>
-              </div>
+            <div className="lesson-player-bar">
+              <button
+                type="button"
+                className="lesson-player-toggle"
+                onClick={togglePlayback}
+                aria-label={isPlaying ? "Pause playback" : "Play lesson"}
+                title={isPlaying ? "Pause" : "Play"}
+              >
+                <span className={`lesson-player-toggle-icon ${isPlaying ? "is-pause" : "is-play"}`}>
+                  {isPlaying ? "❚❚" : "▶"}
+                </span>
+              </button>
 
-              <div className="progress-track">
-                <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
-              </div>
-            </div>
+              <div className="lesson-player-main">
+                <div className="lesson-player-time-row">
+                  <span className="lesson-player-label">Player</span>
+                  <strong>
+                    {formatPlaybackTime(musicalTime)} / {formatPlaybackTime(lessonDuration)}
+                  </strong>
+                </div>
 
-            <div className="status-pill">
-              {isPlaying ? "Playing" : "Paused"} · {Math.round(tempo * 100)}%
+                <input
+                  className="lesson-player-scrubber"
+                  type="range"
+                  min="0"
+                  max={Math.max(lessonDuration, 0.01)}
+                  step="0.05"
+                  value={Math.min(musicalTime, Math.max(lessonDuration, 0.01))}
+                  onChange={(event) => seekToMusicalTime(Number(event.target.value))}
+                  aria-label="Lesson player timeline"
+                  style={{
+                    "--scrubber-progress": `${scrubberProgressPercent}%`,
+                  }}
+                />
+              </div>
             </div>
           </div>
         </header>
@@ -854,17 +994,31 @@ return (
                           </span>
                         </div>
 
-                        <button
-                          type="button"
-                          className="session-item-edit-button"
-                          aria-label={`Rename ${runTitle}`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleRenameLessonByJobId(run.job_id, runTitle);
-                          }}
-                        >
-                          <PencilIcon />
-                        </button>
+                        <div className="session-item-actions">
+                          <button
+                            type="button"
+                            className="session-item-edit-button"
+                            aria-label={`Rename ${runTitle}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleRenameLessonByJobId(run.job_id, runTitle);
+                            }}
+                          >
+                            <PencilIcon />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="session-item-delete-button"
+                            aria-label={`Delete ${runTitle}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDeleteLessonByJobId(run.job_id, runTitle);
+                            }}
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -1148,6 +1302,25 @@ return (
                     </span>
 
                     <small>{run.transcription_method || "unknown"}</small>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      className="home-lesson-delete-button"
+                      aria-label={`Delete ${runTitle}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleDeleteLessonByJobId(run.job_id, runTitle);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          handleDeleteLessonByJobId(run.job_id, runTitle);
+                        }
+                      }}
+                    >
+                      <TrashIcon />
+                    </span>
                   </button>
                 );
               })}
@@ -1237,7 +1410,7 @@ return (
             <strong>{Math.round(tempo * 100)}%</strong>
           </label>
 
-          <div className="mini-control-pill" aria-label="Note display mode">
+          <div className="mini-control-pill display-pill" aria-label="Note display mode">
             <span className="mini-mode-label">Display</span>
 
             <div className="mini-mode-switch">
@@ -1268,9 +1441,8 @@ return (
           </div>
 
           <div
-            className="mini-control-pill notes-view-pill"
+            className="mini-control-pill notes-view-pill notes-pill"
             aria-label="Note view mode"
-            title={noteViewHint}
           >
             <span className="mini-mode-label">Notes</span>
 
@@ -1293,7 +1465,7 @@ return (
             </div>
           </div>
 
-          <div className="mini-control-pill" aria-label="Keyboard label mode">
+          <div className="mini-control-pill keys-pill" aria-label="Keyboard label mode">
             <span className="mini-mode-label">Keys</span>
 
             <div className="mini-mode-switch">
@@ -1335,7 +1507,7 @@ return (
               aria-label="Dashed blocks show low confidence notes"
             >
               <span className="compact-confidence-sample" aria-hidden="true" />
-              <span>Low confidence</span>
+              <span>Low conf.</span>
             </div>
 
             <div className="compact-time-pill">
