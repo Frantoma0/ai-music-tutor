@@ -269,6 +269,7 @@ function App() {
   const [newLessonStatus, setNewLessonStatus] = useState("idle");
   const [newLessonError, setNewLessonError] = useState("");
   const [newLessonStep, setNewLessonStep] = useState("");
+  const [useSourceSeparation, setUseSourceSeparation] = React.useState(false);
 
   const lessonMeta = lesson?.meta ?? {};
   const lessonDurationSeconds =
@@ -840,7 +841,8 @@ async function handleCreateNewLesson() {
       stems_dir: "data/stems",
       artifacts_dir: "artifacts/tracer",
       use_basic_pitch: true,
-      skip_separation: true,
+      skip_separation: !useSourceSeparation,
+      selected_stem: "other",
       preprocess_audio: isAnyAudioPreprocessingEnabled,
       trim_silence: audioPreprocessOptions.trim_silence,
       normalize_audio: audioPreprocessOptions.normalize_audio,
@@ -1434,6 +1436,23 @@ return (
                   </label>
                 </div>
               )}
+            </div>
+
+            <div className="new-lesson-source-panel">
+              <label className="source-separation-toggle">
+                <input
+                  type="checkbox"
+                  checked={useSourceSeparation}
+                  onChange={() => setUseSourceSeparation((currentValue) => !currentValue)}
+                />
+
+                <span>
+                  <strong>Use source separation</strong>
+                  <small>
+                    Slower, but useful for songs with vocals or full instrumental mixes.
+                  </small>
+                </span>
+              </label>
             </div>
 
             {newLessonStatus === "running" && (

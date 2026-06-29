@@ -400,6 +400,26 @@ class RunAudioToAnalysisTool(MCPTool):
                         "description": "Skip Demucs source separation and transcribe the normalized WAV directly.",
                         "default": False,
                     },
+                    "preprocess_audio": {
+                        "type": "boolean",
+                        "description": "Apply safe audio preprocessing before transcription.",
+                        "default": True,
+                    },
+                    "trim_silence": {
+                        "type": "boolean",
+                        "description": "Trim leading silence before transcription.",
+                        "default": True,
+                    },
+                    "normalize_audio": {
+                        "type": "boolean",
+                        "description": "Normalize input volume before transcription.",
+                        "default": True,
+                    },
+                    "highpass_filter": {
+                        "type": "boolean",
+                        "description": "Apply a low rumble high-pass filter before transcription.",
+                        "default": True,
+                    },
                     "persist": {
                         "type": "boolean",
                         "description": "Persist the completed pipeline result to SQLite.",
@@ -426,6 +446,7 @@ class RunAudioToAnalysisTool(MCPTool):
                     "extract": {"type": "object"},
                     "separation": {"type": "object"},
                     "separation_quality": {"type": "object"},
+                    "preprocessing": {"type": "object"},
                     "transcription": {"type": "object"},
                     "analysis": {"type": "object"},
                     "final_audio_path": {"type": ["string", "null"]},
@@ -441,6 +462,7 @@ class RunAudioToAnalysisTool(MCPTool):
                     "extract",
                     "separation",
                     "separation_quality",
+                    "preprocessing",
                     "transcription",
                     "analysis",
                 ],
@@ -471,6 +493,10 @@ class RunAudioToAnalysisTool(MCPTool):
             use_basic_pitch=bool(payload.get("use_basic_pitch", True)),
             selected_stem=payload.get("selected_stem", "other"),
             skip_separation=bool(payload.get("skip_separation", False)),
+            preprocess_audio=bool(payload.get("preprocess_audio", True)),
+            trim_silence=bool(payload.get("trim_silence", True)),
+            normalize_audio=bool(payload.get("normalize_audio", True)),
+            highpass_filter=bool(payload.get("highpass_filter", True)),
         )
 
         data = result.to_dict()
