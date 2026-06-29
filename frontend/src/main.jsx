@@ -16,6 +16,7 @@ import {
   deletePipelineRun,
   fetchLesson,
   fetchPipelineRuns,
+  updatePipelineRunThumbnail,
   isGeneratedYouTubeTitle,
   makeJobIdFromTitle,
   mapLessonNotesToUiNotes,
@@ -105,7 +106,113 @@ function TrashIcon() {
     </svg>
   );
 }
+function HomeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M4 11.5 12 5l8 6.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6.5 10.5V20h11v-9.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M10 20v-5h4v5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
+function NewLessonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect
+        x="4"
+        y="5"
+        width="12"
+        height="14"
+        rx="3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.1"
+      />
+      <path
+        d="M8 10h4M8 14h3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.1"
+        strokeLinecap="round"
+      />
+      <circle
+        cx="17"
+        cy="8"
+        r="4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.1"
+      />
+      <path
+        d="M17 6.2v3.6M15.2 8h3.6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.1"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function CurrentLessonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M8 5.8v12.4c0 .8.9 1.3 1.6.8l8.6-6.2a1 1 0 0 0 0-1.6L9.6 5c-.7-.5-1.6 0-1.6.8Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.3"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SavedLessonsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M7 7h10M7 12h10M7 17h6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.3"
+        strokeLinecap="round"
+      />
+      <rect
+        x="4"
+        y="4"
+        width="16"
+        height="16"
+        rx="3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.1"
+      />
+    </svg>
+  );
+}
 function CloseIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -205,6 +312,8 @@ function App() {
         lessonDuration > 0
           ? Math.min(Math.max(Number(targetMusicalTime) || 0, 0), lessonDuration)
           : Math.max(Number(targetMusicalTime) || 0, 0);
+      triggeredNotesRef.current.clear();
+      lastFrameRef.current = null;
 
       setCurrentTime(clampedMusicalTime / safeTempo);
     },
@@ -627,6 +736,7 @@ function resetNewLessonForm(sourceType = "youtube") {
 async function handleCreateNewLesson() {
   let title = (newLessonTitle ?? "").trim();
   let source = (newLessonSource ?? "").trim();
+  let thumbnailUrl = "";
 
   if (newLessonSourceType === "youtube" && !title && source) {
     title = titleFromYouTubeUrl(source);
@@ -676,6 +786,7 @@ async function handleCreateNewLesson() {
       });
 
       source = youtubeResult.path;
+      thumbnailUrl = youtubeResult.thumbnail_url || "";
 
       if (youtubeResult.title && shouldUseRemoteTitle) {
         title = youtubeResult.title.trim();
@@ -695,6 +806,10 @@ async function handleCreateNewLesson() {
       persist: true,
       session_title: title,
     });
+
+    if (thumbnailUrl) {
+      await updatePipelineRunThumbnail(jobId, thumbnailUrl);
+    }
 
     setNewLessonStep("Saving lesson...");
 
@@ -903,8 +1018,12 @@ return (
             />
 
             <aside className="sessions-drawer" role="dialog" aria-label="Application menu">
-              <div className="sessions-drawer-header">
-                <div>
+              <div className="sessions-drawer-header drawer-header-with-logo">
+                <div className="drawer-logo-slot" aria-label="AI Music Tutor logo">
+                  <span>AMT</span>
+                </div>
+
+                <div className="drawer-header-copy">
                   <p className="sessions-drawer-eyebrow">AI Music Tutor</p>
                   <h2>Menu</h2>
                 </div>
@@ -919,50 +1038,101 @@ return (
                 </button>
               </div>
 
-              <section className="drawer-section">
+              <section className="drawer-section drawer-primary-actions">
                 <button
                   type="button"
-                  className="drawer-home-button"
+                  className="drawer-nav-button"
                   onClick={() => {
                     setScreenMode("home");
                     setIsSessionsOpen(false);
                     setIsPlaying(false);
                   }}
                 >
-                  <span>Home page</span>
-                  <small>Lesson library and quick start</small>
+                  <span className="drawer-nav-icon">
+                    <HomeIcon />
+                  </span>
+
+                  <span className="drawer-nav-copy">
+                    <strong>Home page</strong>
+                    <small>Lesson library and quick start</small>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className="drawer-nav-button drawer-nav-button-accent"
+                  onClick={() => {
+                    resetNewLessonForm("youtube");
+                    setIsNewLessonOpen(true);
+                  }}
+                >
+                  <span className="drawer-nav-icon">
+                    <NewLessonIcon />
+                  </span>
+
+                  <span className="drawer-nav-copy">
+                    <strong>New lesson</strong>
+                    <small>Create from YouTube, MP3 or WAV</small>
+                  </span>
                 </button>
               </section>
 
               <section className="drawer-section">
-                <div className="drawer-section-header">
+                <div className="drawer-section-header drawer-section-header-icon">
+                  <span className="drawer-section-title-icon">
+                    <CurrentLessonIcon />
+                  </span>
+
                   <span>Current lesson</span>
                 </div>
 
-                <div className="sessions-current-card">
-                  <div className="sessions-current-title-row">
+                <div
+                  className="session-list-item current-lesson-menu-card active"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    setScreenMode("lesson");
+                    setIsSessionsOpen(false);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setScreenMode("lesson");
+                      setIsSessionsOpen(false);
+                    }
+                  }}
+                >
+                  <div className="session-list-main">
                     <strong>{lessonTitle}</strong>
 
+                    <span>
+                      {lessonMeta.detected_key || activePipelineRun?.detected_key || "Unknown key"} ·{" "}
+                      {lessonNotes.length} notes ·{" "}
+                      {lessonMeta.transcription_method || activePipelineRun?.transcription_method || "unknown"}
+                    </span>
+                  </div>
+
+                  <div className="session-item-actions">
                     <button
                       type="button"
-                      className="sessions-pencil-button"
+                      className="session-item-edit-button"
                       aria-label="Rename current lesson"
-                      onClick={handleRenameLesson}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleRenameLesson();
+                      }}
                     >
                       <PencilIcon />
                     </button>
                   </div>
-
-                  <span className="sessions-current-meta">
-                    {lessonMeta.detected_key || activePipelineRun?.detected_key || "Unknown key"} ·{" "}
-                    {lessonNotes.length} notes ·{" "}
-                    {lessonMeta.transcription_method || activePipelineRun?.transcription_method || "unknown"}
-                  </span>
                 </div>
               </section>
 
               <section className="drawer-section drawer-section-flex">
-                <div className="drawer-section-header">
+                <div className="drawer-section-header drawer-section-header-icon">
+                  <span className="drawer-section-title-icon">
+                    <SavedLessonsIcon />
+                  </span>
                   <span>Saved lessons</span>
                   <strong>{pipelineRuns.length}</strong>
                 </div>
@@ -1024,26 +1194,6 @@ return (
                   })}
                 </div>
               </section>
-
-              <section className="drawer-section">
-                  <div className="drawer-section-header">
-                    <span>New lesson</span>
-                  </div>
-
-                  <div className="drawer-action-grid">
-                    <button
-                      type="button"
-                      className="drawer-action-button drawer-action-button-primary"
-                      onClick={() => {
-                        resetNewLessonForm("youtube");
-                        setIsNewLessonOpen(true);
-                      }}
-                    >
-                      + New lesson
-                    </button>
-                  </div>
-                </section>
-
             </aside>
           </div>
         )}
@@ -1280,48 +1430,60 @@ return (
             <div className="home-lessons-grid">
               {pipelineRuns.map((run) => {
                 const runTitle = titleForRun(run, titleOverrides);
+                const thumbnailUrl = run.thumbnail_url || "";
 
                 return (
-                  <button
-                    type="button"
+                  <article
                     key={`${run.id}-${run.job_id}`}
                     className="home-lesson-card"
-                    onClick={() => handleSelectLesson(run.job_id)}
                   >
-                    <div className="home-lesson-thumbnail" aria-hidden="true">
-                      <span />
-                      <span />
-                      <span />
-                      <span />
-                    </div>
+                    <button
+                      type="button"
+                      className="home-lesson-open-button"
+                      onClick={() => handleSelectLesson(run.job_id)}
+                    >
+                      <div
+                        className={`home-lesson-thumbnail ${thumbnailUrl ? "has-thumbnail" : ""}`}
+                        aria-hidden="true"
+                      >
+                        {thumbnailUrl ? (
+                          <img
+                            src={thumbnailUrl}
+                            alt=""
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <>
+                            <span />
+                            <span />
+                            <span />
+                            <span />
+                          </>
+                        )}
+                      </div>
 
-                    <strong>{runTitle}</strong>
+                      <strong>{runTitle}</strong>
 
-                    <span>
-                      {run.detected_key || "Unknown key"} · {run.note_count ?? 0} notes
-                    </span>
+                      <span>
+                        {run.detected_key || "Unknown key"} · {run.note_count ?? 0} notes
+                      </span>
 
-                    <small>{run.transcription_method || "unknown"}</small>
-                    <span
-                      role="button"
-                      tabIndex={0}
+                      <small>{run.transcription_method || "unknown"}</small>
+                    </button>
+
+                    <button
+                      type="button"
                       className="home-lesson-delete-button"
                       aria-label={`Delete ${runTitle}`}
                       onClick={(event) => {
                         event.stopPropagation();
                         handleDeleteLessonByJobId(run.job_id, runTitle);
                       }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          handleDeleteLessonByJobId(run.job_id, runTitle);
-                        }
-                      }}
                     >
                       <TrashIcon />
-                    </span>
-                  </button>
+                    </button>
+                  </article>
                 );
               })}
             </div>
