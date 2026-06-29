@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
     job_id TEXT NOT NULL,
     status TEXT NOT NULL,
     source TEXT,
+    thumbnail_url TEXT,
     final_audio_path TEXT,
     midi_path TEXT,
     detected_key TEXT,

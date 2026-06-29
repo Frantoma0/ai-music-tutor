@@ -12,6 +12,7 @@ from app.pipeline.separation_quality import analyze_separation_quality
 from app.pipeline.resource_guard import gpu_sequential_guard
 from app.pipeline.source_separation import SourceSeparationResult, separate_sources
 from app.pipeline.tracer import run_tracer_bullet
+from app.pipeline.audio_preprocess import preprocess_audio_for_transcription
 
 
 @dataclass
@@ -22,6 +23,7 @@ class AudioToAnalysisPipelineResult:
     extract: dict[str, Any]
     separation: dict[str, Any]
     separation_quality: dict[str, Any]
+    preprocessing: dict[str, Any]
     transcription: dict[str, Any]
     analysis: dict[str, Any]
     final_audio_path: str | None
@@ -75,6 +77,13 @@ def _load_transcription_metadata(
 def _empty_quality() -> dict[str, Any]:
     return {}
 
+def _empty_preprocessing() -> dict[str, Any]:
+    return {
+        "status": "skipped",
+        "enabled": False,
+        "filters": [],
+        "error": None,
+    }
 
 def _analyze_separation_quality_safely(
     extract_result: AudioExtractionResult,
@@ -132,14 +141,19 @@ def run_audio_to_analysis_pipeline(
     artifacts_dir: str | Path = "artifacts/tracer",
     use_basic_pitch: bool = True,
     selected_stem: str = "other",
+    skip_separation: bool = False,
+    preprocess_audio: bool = True,
+    trim_silence: bool = True,
+    normalize_audio: bool = True,
+    highpass_filter: bool = True,
 ) -> AudioToAnalysisPipelineResult:
     """
     Day 6 orchestrator:
 
     source audio
     -> T1 extract_audio
-    -> T2 separate_sources
-    -> separation quality analysis
+    -> optional T2 separate_sources
+    -> optional separation quality analysis
     -> adaptive transcription audio selection
     -> T3 tracer analysis
     -> final JSON-compatible result
@@ -151,6 +165,7 @@ def run_audio_to_analysis_pipeline(
     empty_separation: dict[str, Any] = {}
     empty_transcription: dict[str, Any] = {}
     empty_analysis: dict[str, Any] = {}
+    empty_preprocessing: dict[str, Any] = _empty_preprocessing()
 
     try:
         extract_result: AudioExtractionResult = extract_audio(
@@ -169,6 +184,7 @@ def run_audio_to_analysis_pipeline(
                 extract=extract_data,
                 separation=empty_separation,
                 separation_quality=_empty_quality(),
+                preprocessing=empty_preprocessing,
                 transcription=empty_transcription,
                 analysis=empty_analysis,
                 final_audio_path=None,
@@ -178,41 +194,93 @@ def run_audio_to_analysis_pipeline(
                 error=extract_result.error,
             )
 
-        separation_result: SourceSeparationResult = separate_sources(
-            wav_path=extract_result.wav_path,
-            output_dir=stems_dir,
-            job_id=job_id,
-            selected_stem=selected_stem,
-        )
+        if skip_separation:
+            transcription_audio_path = str(extract_result.wav_path)
 
-        separation_data = separation_result.to_dict()
+            separation_data = {
+                "job_id": job_id,
+                "input_wav": str(extract_result.wav_path),
+                "output_dir": str(stems_dir),
+                "model_name": None,
+                "stems": {},
+                "selected_stem": "original",
+                "selected_stem_path": str(extract_result.wav_path),
+                "status": "skipped",
+                "error": None,
+            }
 
-        if separation_result.status != "completed":
-            return AudioToAnalysisPipelineResult(
+            separation_quality_data = {
+                "status": "skipped",
+                "input_wav": str(extract_result.wav_path),
+                "selected_stem": "original",
+                "selected_stem_path": str(extract_result.wav_path),
+                "decision": "prefer_original_wav",
+                "recommended_audio_path": str(extract_result.wav_path),
+                "likely_solo_piano": True,
+                "reason": "Source separation skipped for piano-focused transcription.",
+            }
+        else:
+            separation_result: SourceSeparationResult = separate_sources(
+                wav_path=extract_result.wav_path,
+                output_dir=stems_dir,
                 job_id=job_id,
-                source=source_str,
-                status="error",
-                extract=extract_data,
-                separation=separation_data,
-                separation_quality=_empty_quality(),
-                transcription=empty_transcription,
-                analysis=empty_analysis,
-                final_audio_path=None,
-                midi_path=None,
-                detected_key=None,
-                hvs_score=None,
-                error=separation_result.error,
+                selected_stem=selected_stem,
             )
 
-        separation_quality_data = _analyze_separation_quality_safely(
-            extract_result=extract_result,
-            separation_result=separation_result,
-        )
+            separation_data = separation_result.to_dict()
 
-        transcription_audio_path = _choose_transcription_audio_path(
-            separation_result=separation_result,
-            separation_quality_data=separation_quality_data,
-        )
+            if separation_result.status != "completed":
+                return AudioToAnalysisPipelineResult(
+                    job_id=job_id,
+                    source=source_str,
+                    status="error",
+                    extract=extract_data,
+                    separation=separation_data,
+                    separation_quality=_empty_quality(),
+                    preprocessing=empty_preprocessing,
+                    transcription=empty_transcription,
+                    analysis=empty_analysis,
+                    final_audio_path=None,
+                    midi_path=None,
+                    detected_key=None,
+                    hvs_score=None,
+                    error=separation_result.error,
+                )
+
+            separation_quality_data = _analyze_separation_quality_safely(
+                extract_result=extract_result,
+                separation_result=separation_result,
+            )
+
+            transcription_audio_path = _choose_transcription_audio_path(
+                separation_result=separation_result,
+                separation_quality_data=separation_quality_data,
+            )
+
+        preprocessing_data = _empty_preprocessing()
+
+        if preprocess_audio:
+            preprocessed_audio_path = Path(processed_dir) / job_id / "preprocessed.wav"
+
+            preprocess_result = preprocess_audio_for_transcription(
+                transcription_audio_path,
+                preprocessed_audio_path,
+                trim_silence=trim_silence,
+                normalize_audio=normalize_audio,
+                highpass_filter=highpass_filter,
+            )
+
+            preprocessing_data = {
+                "status": preprocess_result.status,
+                "input_path": preprocess_result.input_path,
+                "output_path": preprocess_result.output_path,
+                "enabled": preprocess_result.enabled,
+                "filters": preprocess_result.filters,
+                "error": preprocess_result.error,
+            }
+
+            if preprocess_result.status == "completed":
+                transcription_audio_path = str(preprocessed_audio_path)    
 
         tracer_result: TracerBulletResult = run_tracer_bullet(
             audio_path=transcription_audio_path,
@@ -237,6 +305,7 @@ def run_audio_to_analysis_pipeline(
                 extract=extract_data,
                 separation=separation_data,
                 separation_quality=separation_quality_data,
+                preprocessing=preprocessing_data,
                 transcription=transcription_data,
                 analysis=analysis_data,
                 final_audio_path=transcription_audio_path,
@@ -253,6 +322,7 @@ def run_audio_to_analysis_pipeline(
             extract=extract_data,
             separation=separation_data,
             separation_quality=separation_quality_data,
+            preprocessing=preprocessing_data,
             transcription=transcription_data,
             analysis=analysis_data,
             final_audio_path=transcription_audio_path,
@@ -270,6 +340,7 @@ def run_audio_to_analysis_pipeline(
             extract=empty_extract,
             separation=empty_separation,
             separation_quality=_empty_quality(),
+            preprocessing=empty_preprocessing,
             transcription=_empty_transcription(),
             analysis=empty_analysis,
             final_audio_path=None,

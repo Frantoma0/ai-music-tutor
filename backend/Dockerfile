@@ -5,10 +5,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsndfile1 \
     libsndfile1-dev \
     curl \
+    ca-certificates \
+    unzip \
     git \
     fluidsynth \
     fluid-soundfont-gm \
     && rm -rf /var/lib/apt/lists/*
+
+
+# Deno is used by yt-dlp as an external JavaScript runtime for YouTube n-challenge solving.
+ENV DENO_INSTALL=/usr/local
+RUN curl -fsSL https://deno.land/install.sh | sh \
+    && deno --version
 
 WORKDIR /app
 
@@ -47,4 +55,4 @@ RUN mkdir -p /app/data/raw_storage /app/data/processed \
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

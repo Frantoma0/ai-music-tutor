@@ -153,7 +153,11 @@ def _try_basic_pitch(
         midi_data.write(str(normalized_midi_path))
 
         raw_midi_path = raw_output_dir / f"{audio_path.stem}_basic_pitch.mid"
-        shutil.copyfile(normalized_midi_path, raw_midi_path)
+
+        # Basic Pitch can already write to the normalized output path depending
+        # on the selected output directory. Avoid copying a file onto itself.
+        if normalized_midi_path.resolve() != raw_midi_path.resolve():
+            shutil.copyfile(normalized_midi_path, raw_midi_path)
 
         return normalized_midi_path, note_events, None
 
@@ -178,8 +182,10 @@ def _mirror_transcription_to_data_midi(
 
     if result.midi_path is not None:
         source_midi = Path(result.midi_path)
-        if source_midi.exists():
-            shutil.copyfile(source_midi, mirror_dir / "output.mid")
+        target_midi = mirror_dir / "output.mid"
+
+        if source_midi.exists() and source_midi.resolve() != target_midi.resolve():
+            shutil.copyfile(source_midi, target_midi)
 
     (mirror_dir / "notes.json").write_text(
         json.dumps(result.notes, indent=2, ensure_ascii=False),
