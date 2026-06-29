@@ -43,6 +43,8 @@ def test_run_audio_to_analysis_tool_via_api(monkeypatch):
         artifacts_dir="artifacts/tracer",
         use_basic_pitch=True,
         selected_stem="other",
+        skip_separation=False,
+        **kwargs,
     ):
         return AudioToAnalysisPipelineResult(
             job_id=job_id or "fake-job",
