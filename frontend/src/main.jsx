@@ -349,17 +349,44 @@ function App() {
   const unknownConfidenceCount = lessonNotes.filter(
     (note) => note.confidence === null || note.confidence === undefined
   ).length;
+  const [isAudioPreprocessOpen, setIsAudioPreprocessOpen] = React.useState(false);
   const [audioPreprocessOptions, setAudioPreprocessOptions] = React.useState({
-    preprocess_audio: true,
     trim_silence: true,
     normalize_audio: true,
     highpass_filter: true,
   });
+
+  const isAnyAudioPreprocessingEnabled =
+    audioPreprocessOptions.trim_silence ||
+    audioPreprocessOptions.normalize_audio ||
+    audioPreprocessOptions.highpass_filter;
+
+  const areAllAudioPreprocessingOptionsEnabled =
+    audioPreprocessOptions.trim_silence &&
+    audioPreprocessOptions.normalize_audio &&
+    audioPreprocessOptions.highpass_filter;
   function toggleAudioPreprocessOption(optionName) {
     setAudioPreprocessOptions((currentOptions) => ({
       ...currentOptions,
       [optionName]: !currentOptions[optionName],
     }));
+  }
+
+  function toggleAudioPreprocessingEnabled() {
+    setAudioPreprocessOptions((currentOptions) => {
+      const areAllEnabled =
+        currentOptions.trim_silence &&
+        currentOptions.normalize_audio &&
+        currentOptions.highpass_filter;
+
+      const nextValue = !areAllEnabled;
+
+      return {
+        trim_silence: nextValue,
+        normalize_audio: nextValue,
+        highpass_filter: nextValue,
+      };
+    });
   }
   const lastFrameRef = useRef(null);
   const synthRef = useRef(null);
@@ -814,7 +841,7 @@ async function handleCreateNewLesson() {
       artifacts_dir: "artifacts/tracer",
       use_basic_pitch: true,
       skip_separation: true,
-      preprocess_audio: audioPreprocessOptions.preprocess_audio,
+      preprocess_audio: isAnyAudioPreprocessingEnabled,
       trim_silence: audioPreprocessOptions.trim_silence,
       normalize_audio: audioPreprocessOptions.normalize_audio,
       highpass_filter: audioPreprocessOptions.highpass_filter,
@@ -1337,62 +1364,76 @@ return (
             </label>
           )}
 
-            <div className="new-lesson-preprocess-panel">
-              <div className="new-lesson-preprocess-header">
-                <strong>Audio preprocessing</strong>
-                <span>Safe cleanup before transcription</span>
+            <div className="new-lesson-preprocess-panel compact">
+              <div className="new-lesson-preprocess-summary">
+                <label className="preprocess-master-toggle">
+                  <input
+                    type="checkbox"
+                    checked={areAllAudioPreprocessingOptionsEnabled}
+                    onChange={toggleAudioPreprocessingEnabled}
+                  />
+
+                  <span>
+                    <strong>Audio preprocessing</strong>
+                    <small>Safe cleanup before transcription</small>
+                  </span>
+                </label>
+
+                <button
+                  type="button"
+                  className={`preprocess-expand-button ${
+                    isAudioPreprocessOpen ? "open" : ""
+                  }`}
+                  aria-label={
+                    isAudioPreprocessOpen
+                      ? "Hide audio preprocessing details"
+                      : "Show audio preprocessing details"
+                  }
+                  aria-expanded={isAudioPreprocessOpen}
+                  onClick={() => setIsAudioPreprocessOpen((isOpen) => !isOpen)}
+                >
+                </button>
               </div>
 
-              <label className="preprocess-toggle-row">
-                <input
-                  type="checkbox"
-                  checked={audioPreprocessOptions.preprocess_audio}
-                  onChange={() => toggleAudioPreprocessOption("preprocess_audio")}
-                />
-                <span>
-                  <strong>Enable preprocessing</strong>
-                  <small>Apply the selected cleanup steps before Basic Pitch.</small>
-                </span>
-              </label>
+              {isAudioPreprocessOpen && (
+                <div className="new-lesson-preprocess-details">
+                  <label className="preprocess-toggle-row">
+                    <input
+                      type="checkbox"
+                      checked={audioPreprocessOptions.trim_silence}
+                      onChange={() => toggleAudioPreprocessOption("trim_silence")}
+                    />
+                    <span>
+                      <strong>Trim leading silence</strong>
+                      <small>Remove quiet silence at the start of the audio.</small>
+                    </span>
+                  </label>
 
-              <label className="preprocess-toggle-row">
-                <input
-                  type="checkbox"
-                  checked={audioPreprocessOptions.trim_silence}
-                  disabled={!audioPreprocessOptions.preprocess_audio}
-                  onChange={() => toggleAudioPreprocessOption("trim_silence")}
-                />
-                <span>
-                  <strong>Trim leading silence</strong>
-                  <small>Remove quiet silence at the start of the audio.</small>
-                </span>
-              </label>
+                  <label className="preprocess-toggle-row">
+                    <input
+                      type="checkbox"
+                      checked={audioPreprocessOptions.normalize_audio}
+                      onChange={() => toggleAudioPreprocessOption("normalize_audio")}
+                    />
+                    <span>
+                      <strong>Normalize volume</strong>
+                      <small>Make quiet or loud recordings more consistent.</small>
+                    </span>
+                  </label>
 
-              <label className="preprocess-toggle-row">
-                <input
-                  type="checkbox"
-                  checked={audioPreprocessOptions.normalize_audio}
-                  disabled={!audioPreprocessOptions.preprocess_audio}
-                  onChange={() => toggleAudioPreprocessOption("normalize_audio")}
-                />
-                <span>
-                  <strong>Normalize volume</strong>
-                  <small>Make quiet or loud recordings more consistent.</small>
-                </span>
-              </label>
-
-              <label className="preprocess-toggle-row">
-                <input
-                  type="checkbox"
-                  checked={audioPreprocessOptions.highpass_filter}
-                  disabled={!audioPreprocessOptions.preprocess_audio}
-                  onChange={() => toggleAudioPreprocessOption("highpass_filter")}
-                />
-                <span>
-                  <strong>High-pass rumble filter</strong>
-                  <small>Reduce low-frequency noise before transcription.</small>
-                </span>
-              </label>
+                  <label className="preprocess-toggle-row">
+                    <input
+                      type="checkbox"
+                      checked={audioPreprocessOptions.highpass_filter}
+                      onChange={() => toggleAudioPreprocessOption("highpass_filter")}
+                    />
+                    <span>
+                      <strong>High-pass rumble filter</strong>
+                      <small>Reduce low-frequency noise before transcription.</small>
+                    </span>
+                  </label>
+                </div>
+              )}
             </div>
 
             {newLessonStatus === "running" && (

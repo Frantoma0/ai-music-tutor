@@ -7170,7 +7170,7 @@ main.app-shell {
 .new-lesson-preprocess-panel {
   display: grid;
   gap: 10px;
-  padding: 14px;
+  padding: 12px;
   border-radius: 18px;
   border: 1px solid rgba(127, 99, 199, 0.16);
   background:
@@ -7182,21 +7182,75 @@ main.app-shell {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
-.new-lesson-preprocess-header {
-  display: grid;
-  gap: 3px;
-  margin-bottom: 2px;
+.new-lesson-preprocess-panel.compact {
+  padding: 10px 12px;
 }
 
-.new-lesson-preprocess-header strong {
+.new-lesson-preprocess-summary {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.preprocess-master-toggle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.preprocess-master-toggle input,
+.preprocess-toggle-row input {
+  accent-color: #8b64dc;
+}
+
+.preprocess-master-toggle span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.preprocess-master-toggle strong {
   color: #33285c;
   font-size: 0.95rem;
+  line-height: 1.1;
 }
 
-.new-lesson-preprocess-header span {
+.preprocess-master-toggle small {
   color: #7a7199;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 700;
+  line-height: 1.2;
+}
+
+.preprocess-expand-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid rgba(127, 99, 199, 0.18);
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.96),
+      rgba(243, 238, 255, 0.86)
+    );
+  color: #66579b;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 8px 18px rgba(76, 55, 124, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.new-lesson-preprocess-details {
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
 }
 
 .preprocess-toggle-row {
@@ -7213,7 +7267,6 @@ main.app-shell {
 
 .preprocess-toggle-row input {
   margin-top: 3px;
-  accent-color: #8b64dc;
 }
 
 .preprocess-toggle-row span {
@@ -7223,16 +7276,41 @@ main.app-shell {
 
 .preprocess-toggle-row strong {
   color: #3c3264;
-  font-size: 0.86rem;
+  font-size: 0.84rem;
 }
 
 .preprocess-toggle-row small {
   color: #847a9e;
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   line-height: 1.25;
 }
 
-.preprocess-toggle-row:has(input:disabled) {
-  opacity: 0.56;
-  cursor: not-allowed;
+.preprocess-expand-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
 }
+
+.preprocess-expand-button::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-right: 2.5px solid #000; 
+  border-bottom: 2.5px solid #000;
+  border-radius: 2px; 
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.2s ease-in-out;
+  display: block;
+}
+
+.preprocess-expand-button.open::before {
+  transform: translateY(2px) rotate(225deg);
+}
+
