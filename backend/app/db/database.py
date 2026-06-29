@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import uuid
+import asyncio
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -191,6 +193,7 @@ async def list_pipeline_runs(
                 pipeline_runs.job_id,
                 pipeline_runs.status,
                 pipeline_runs.source,
+                pipeline_runs.thumbnail_url,
                 pipeline_runs.final_audio_path,
                 pipeline_runs.midi_path,
                 pipeline_runs.detected_key,
@@ -406,3 +409,76 @@ async def get_metrics_for_run(
         "metrics": metrics,
         "count": len(metrics),
     }
+
+async def delete_pipeline_run_by_job_id(
+    db_path: str | Path = DEFAULT_DB_PATH,
+    job_id: str = "",
+) -> bool:
+    def _delete() -> bool:
+        with sqlite3.connect(db_path) as connection:
+            connection.execute("PRAGMA foreign_keys = ON")
+
+            cursor = connection.execute(
+                "DELETE FROM pipeline_runs WHERE job_id = ?",
+                (job_id,),
+            )
+
+            connection.commit()
+
+            return cursor.rowcount > 0
+
+    return await asyncio.to_thread(_delete)
+
+async def ensure_pipeline_runs_thumbnail_column(
+    db_path: str | Path = DEFAULT_DB_PATH,
+) -> None:
+    def _ensure() -> None:
+        with sqlite3.connect(db_path) as connection:
+            columns = connection.execute(
+                "PRAGMA table_info(pipeline_runs)"
+            ).fetchall()
+
+            column_names = {column[1] for column in columns}
+
+            if "thumbnail_url" not in column_names:
+                connection.execute(
+                    "ALTER TABLE pipeline_runs ADD COLUMN thumbnail_url TEXT"
+                )
+                connection.commit()
+
+    await asyncio.to_thread(_ensure)
+
+async def set_pipeline_run_thumbnail_url(
+    db_path: str | Path = DEFAULT_DB_PATH,
+    job_id: str = "",
+    thumbnail_url: str | None = None,
+) -> bool:
+    def _update() -> bool:
+        with sqlite3.connect(db_path) as connection:
+            connection.execute("PRAGMA foreign_keys = ON")
+
+            columns = connection.execute(
+                "PRAGMA table_info(pipeline_runs)"
+            ).fetchall()
+
+            column_names = {column[1] for column in columns}
+
+            if "thumbnail_url" not in column_names:
+                connection.execute(
+                    "ALTER TABLE pipeline_runs ADD COLUMN thumbnail_url TEXT"
+                )
+
+            cursor = connection.execute(
+                """
+                UPDATE pipeline_runs
+                SET thumbnail_url = ?
+                WHERE job_id = ?
+                """,
+                (thumbnail_url, job_id),
+            )
+
+            connection.commit()
+
+            return cursor.rowcount > 0
+
+    return await asyncio.to_thread(_update)

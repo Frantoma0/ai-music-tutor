@@ -5,14 +5,14 @@ import {
   pitchName,
   LOWEST_PITCH,
   HIGHEST_PITCH,
+  getPitchCenterRatio,
+  isBlackPitch,
 } from "../lib/noteMapping";
 
-const BLACK_PITCH_CLASSES = new Set([1, 3, 6, 8, 10]);
-
-const BLACK_KEY_WIDTH_RATIO = 0.08;
+const BLACK_KEY_WIDTH_RATIO = 0.58;
 
 function isBlackKey(pitch) {
-  return BLACK_PITCH_CLASSES.has(Number(pitch) % 12);
+  return isBlackPitch(pitch);
 }
 
 function isInCorrectionMask(note) {
@@ -74,12 +74,13 @@ function shouldShowKeyLabel(pitch, labelMode) {
   return Number(pitch) % 12 === 0;
 }
 
-function blackKeyStyle(whiteSlot, whiteKeyCount) {
-  const centerPercent = ((whiteSlot + 1) / whiteKeyCount) * 100;
+function blackKeyStyle(pitch, whiteKeyCount) {
+  const centerPercent =
+    getPitchCenterRatio(pitch, LOWEST_PITCH, HIGHEST_PITCH) * 100;
 
   return {
     left: `${centerPercent}%`,
-    width: `calc((100% / ${whiteKeyCount}) * 0.52)`,
+    width: `calc((100% / ${whiteKeyCount}) * ${BLACK_KEY_WIDTH_RATIO})`,
   };
 }
 
@@ -119,7 +120,7 @@ export function PianoKeyboard({ notes, musicalTime = 0, labelMode = "c-only" }) 
           return (
             <div key={pitch} className={keyClassName(pitch, activeByPitch)}>
               {shouldShowKeyLabel(pitch, labelMode) && (
-                <span className="key-label">
+                <span className="white-key-label">
                   {pitchName(pitch)}
                 </span>
               )}
@@ -130,21 +131,14 @@ export function PianoKeyboard({ notes, musicalTime = 0, labelMode = "c-only" }) 
 
       <div className="black-key-row">
         {blackPitches.map((pitch) => {
-          const previousWhite = pitch - 1;
-          const whiteSlot = pitchToWhiteIndex.get(previousWhite);
-
-          if (whiteSlot === undefined) {
-            return null;
-          }
-
           return (
             <div
               key={pitch}
               className={keyClassName(pitch, activeByPitch)}
-              style={blackKeyStyle(whiteSlot, whitePitches.length)}
+              style={blackKeyStyle(pitch, whitePitches.length)}
             >
               {shouldShowKeyLabel(pitch, labelMode) && (
-                <span className="key-label black-label">
+                <span className="black-key-label">
                   {pitchName(pitch)}
                 </span>
               )}

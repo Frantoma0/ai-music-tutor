@@ -4,7 +4,7 @@ from typing import Any
 from pathlib import Path
 from re import sub
 from uuid import uuid4
-
+import json
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
@@ -19,15 +19,14 @@ def safe_name(value: str) -> str:
     cleaned = sub(r"[^a-zA-Z0-9._-]+", "-", value.strip())
     return cleaned.strip("-") or "audio"
 
-def read_youtube_title(url: str) -> str | None:
-    title_command = [
+def read_youtube_metadata(url: str) -> dict[str, str | None]:
+    metadata_command = [
         "/usr/local/bin/yt-dlp",
         "--js-runtimes",
         "deno",
         "--skip-download",
         "--no-playlist",
-        "--print",
-        "%(title)s",
+        "--dump-single-json",
         "--extractor-args",
         "youtube:player_client=web,android,mweb",
         url,
@@ -35,25 +34,31 @@ def read_youtube_title(url: str) -> str | None:
 
     try:
         result = subprocess.run(
-            title_command,
+            metadata_command,
             capture_output=True,
             text=True,
-            timeout=90,
-            check=False,
+            check=True,
+            timeout=30,
         )
-    except subprocess.TimeoutExpired:
-        return None
 
-    if result.returncode != 0:
-        return None
+        data = json.loads(result.stdout or "{}")
 
-    lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        thumbnail_url = data.get("thumbnail")
+        thumbnails = data.get("thumbnails") or []
 
-    if not lines:
-        return None
+        if thumbnails:
+            best_thumbnail = thumbnails[-1]
+            thumbnail_url = best_thumbnail.get("url") or thumbnail_url
 
-    return lines[-1]
-
+        return {
+            "title": data.get("title"),
+            "thumbnail_url": thumbnail_url,
+        }
+    except Exception:
+        return {
+            "title": None,
+            "thumbnail_url": None,
+        }
 @router.post("/audio")
 async def upload_audio_file(
     job_id: str = Form(...),
@@ -102,7 +107,9 @@ async def upload_youtube_audio(payload: dict[str, Any]):
         raise HTTPException(status_code=400, detail="Missing job_id.")
 
     safe_job_id = safe_name(job_id)
-    youtube_title = read_youtube_title(url)
+    youtube_metadata = read_youtube_metadata(url)
+    youtube_title = youtube_metadata.get("title")
+    youtube_thumbnail_url = youtube_metadata.get("thumbnail_url")
 
     work_dir = Path("data/processed") / safe_job_id
     raw_dir = work_dir / "raw"
@@ -221,6 +228,7 @@ async def upload_youtube_audio(payload: dict[str, Any]):
         "url": url,
         "job_id": safe_job_id,
         "title": youtube_title,
+        "thumbnail_url": youtube_thumbnail_url,
         "downloaded_path": str(downloaded_file),
         "path": str(wav_path),
         "size_bytes": wav_path.stat().st_size,

@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from app.db.database import DEFAULT_DB_PATH, get_pipeline_run
 from app.pipeline.lesson_preparation import prepare_lesson_for_job
 from app.pipeline.lesson_schema import LessonResponse
-
+from fastapi import HTTPException
 
 router = APIRouter(prefix="/api/lessons", tags=["lessons"])
 

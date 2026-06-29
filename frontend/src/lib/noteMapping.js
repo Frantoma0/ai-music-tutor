@@ -32,21 +32,44 @@ export function isBlackPitch(pitch) {
   return BLACK_PITCH_CLASSES.has(pitchClass(pitch));
 }
 
-export function buildPitchRange() {
+export function buildPitchRange(
+  lowestPitch = LOWEST_PITCH,
+  highestPitch = HIGHEST_PITCH
+) {
   const pitches = [];
 
-  for (let pitch = LOWEST_PITCH; pitch <= HIGHEST_PITCH; pitch += 1) {
+  for (let pitch = lowestPitch; pitch <= highestPitch; pitch += 1) {
     pitches.push(pitch);
   }
 
   return pitches;
 }
 
-export function getKeyboardPitchLayout() {
-  const allPitches = buildPitchRange();
+export function getKeyboardWhitePitches(
+  lowestPitch = LOWEST_PITCH,
+  highestPitch = HIGHEST_PITCH
+) {
+  return buildPitchRange(lowestPitch, highestPitch).filter(
+    (pitch) => !isBlackPitch(pitch)
+  );
+}
 
-  const whitePitches = allPitches.filter((pitch) => !isBlackPitch(pitch));
-  const blackPitches = allPitches.filter((pitch) => isBlackPitch(pitch));
+export function getKeyboardBlackPitches(
+  lowestPitch = LOWEST_PITCH,
+  highestPitch = HIGHEST_PITCH
+) {
+  return buildPitchRange(lowestPitch, highestPitch).filter((pitch) =>
+    isBlackPitch(pitch)
+  );
+}
+
+export function getKeyboardPitchLayout(
+  lowestPitch = LOWEST_PITCH,
+  highestPitch = HIGHEST_PITCH
+) {
+  const allPitches = buildPitchRange(lowestPitch, highestPitch);
+  const whitePitches = getKeyboardWhitePitches(lowestPitch, highestPitch);
+  const blackPitches = getKeyboardBlackPitches(lowestPitch, highestPitch);
 
   return {
     allPitches,
@@ -55,47 +78,45 @@ export function getKeyboardPitchLayout() {
   };
 }
 
-function isBlackPitchForLayout(pitch) {
-  return BLACK_PITCH_CLASSES.has(Number(pitch) % 12);
-}
+export function getPitchCenterRatio(
+  pitch,
+  lowestPitch = LOWEST_PITCH,
+  highestPitch = HIGHEST_PITCH
+) {
+  const numericPitch = Number(pitch);
+  const whitePitches = getKeyboardWhitePitches(lowestPitch, highestPitch);
 
-function buildWhitePitchesForLayout() {
-  const whitePitches = [];
+  if (!whitePitches.length) {
+    return 0;
+  }
 
-  for (let pitch = LOWEST_PITCH; pitch <= HIGHEST_PITCH; pitch += 1) {
-    if (!isBlackPitchForLayout(pitch)) {
-      whitePitches.push(pitch);
+  if (isBlackPitch(numericPitch)) {
+    const previousWhitePitch = numericPitch - 1;
+    const previousWhiteIndex = whitePitches.indexOf(previousWhitePitch);
+
+    if (previousWhiteIndex >= 0) {
+      return (previousWhiteIndex + 1) / whitePitches.length;
     }
   }
 
-  return whitePitches;
+  const whiteIndex = whitePitches.indexOf(numericPitch);
+
+  if (whiteIndex >= 0) {
+    return (whiteIndex + 0.5) / whitePitches.length;
+  }
+
+  const fallbackRatio =
+    (numericPitch - lowestPitch) / Math.max(1, highestPitch - lowestPitch);
+
+  return Math.min(1, Math.max(0, fallbackRatio));
 }
 
 export function pitchToX(pitch, width) {
-  const numericPitch = Number(pitch);
-  const whitePitches = buildWhitePitchesForLayout();
-  const whiteKeyWidth = width / whitePitches.length;
-
-  if (isBlackPitchForLayout(numericPitch)) {
-    const previousWhite = numericPitch - 1;
-    const whiteSlot = whitePitches.indexOf(previousWhite);
-
-    if (whiteSlot >= 0) {
-      return (whiteSlot + 1) * whiteKeyWidth;
-    }
-  }
-
-  const whiteSlot = whitePitches.indexOf(numericPitch);
-
-  if (whiteSlot >= 0) {
-    return (whiteSlot + 0.5) * whiteKeyWidth;
-  }
-
-  return 0;
+  return getPitchCenterRatio(pitch) * width;
 }
 
 export function pitchName(pitch) {
-  return NOTE_NAMES[pitch % 12];
+    return NOTE_NAMES[pitchClass(pitch)].replace("#", "♯");
 }
 
 export function confidenceLevel(confidence) {

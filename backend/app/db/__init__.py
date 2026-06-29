@@ -10,6 +10,9 @@ from app.db.database import (
     get_pipeline_run,
     list_metrics,
     get_metrics_for_run,
+    delete_pipeline_run_by_job_id,
+    ensure_pipeline_runs_thumbnail_column,
+    set_pipeline_run_thumbnail_url,
 )
 
 __all__ = [
@@ -24,6 +27,9 @@ __all__ = [
     "get_pipeline_run",
     "list_metrics",
     "get_metrics_for_run",
+    "delete_pipeline_run_by_job_id",
+    "ensure_pipeline_runs_thumbnail_column",
+    "set_pipeline_run_thumbnail_url",
 ]
 
 from app.db.correction_persistence import (

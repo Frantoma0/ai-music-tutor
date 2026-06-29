@@ -239,3 +239,59 @@ export function isGeneratedYouTubeTitle(title = "", url = "") {
 
   return Boolean(generatedTitle) && title.trim() === generatedTitle.trim();
 }
+
+export async function deletePipelineRun(jobId) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/pipeline-runs/${encodeURIComponent(jobId)}`,
+    {
+      method: "DELETE",
+    }
+  );
+
+  if (!response.ok) {
+    let message = `Failed to delete lesson ${jobId}`;
+
+    try {
+      const error = await response.json();
+      message = error.detail || message;
+    } catch {
+      const text = await response.text();
+      message = text || message;
+    }
+
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
+export async function updatePipelineRunThumbnail(jobId, thumbnailUrl) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/pipeline-runs/${encodeURIComponent(jobId)}/thumbnail`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        thumbnail_url: thumbnailUrl,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    let message = `Failed to update thumbnail for ${jobId}`;
+
+    try {
+      const error = await response.json();
+      message = error.detail || message;
+    } catch {
+      const text = await response.text();
+      message = text || message;
+    }
+
+    throw new Error(message);
+  }
+
+  return response.json();
+}
