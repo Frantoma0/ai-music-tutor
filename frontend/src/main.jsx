@@ -30,6 +30,98 @@ import {
 
 const FALLBACK_DURATION_SECONDS = 4.2;
 
+const NEW_LESSON_PROGRESS_COPY = {
+  preparing: {
+    title: "Warming up the piano engine...",
+    hints: [
+      "Tuning the tiny digital piano inside your browser.",
+      "A good lesson starts with a clean signal and a little patience.",
+      "Getting the stage ready before the notes arrive.",
+    ],
+  },
+  uploading: {
+    title: "Uploading your audio...",
+    hints: [
+      "Moving your recording into the lesson pipeline.",
+      "Keeping the audio safe before the AI starts listening.",
+      "Your file is taking the scenic route to the analyzer.",
+    ],
+  },
+  downloading: {
+    title: "Downloading the performance...",
+    hints: [
+      "Pulling the audio track and leaving the video drama behind.",
+      "Grabbing the sound so the piano blocks can do their thing.",
+      "Fun fact: piano covers are basically sheet music wearing headphones.",
+    ],
+  },
+  separating: {
+    title: "Separating instruments...",
+    hints: [
+      "Demucs is trying to give the piano its own spotlight.",
+      "This step is slower because the AI is splitting the mix into stems.",
+      "Tiny studio engineer mode: vocals, drums, bass, other.",
+    ],
+  },
+  transcribing: {
+    title: "Listening for notes...",
+    hints: [
+      "Basic Pitch is turning sound into MIDI notes.",
+      "The AI is hunting for note starts, endings, and pitches.",
+      "Fun fact: middle C is usually called C4 in scientific pitch notation.",
+    ],
+  },
+  analyzing: {
+    title: "Analyzing harmony...",
+    hints: [
+      "Looking for the key, note confidence, and musical structure.",
+      "The notes are becoming an interactive lesson.",
+      "Almost there — the harmony detective is working.",
+    ],
+  },
+  saving: {
+    title: "Saving your lesson...",
+    hints: [
+      "Packing notes, metadata, and results into your library.",
+      "Adding this lesson to your practice shelf.",
+      "Making sure the lesson survives the refresh button.",
+    ],
+  },
+  loading: {
+    title: "Opening your lesson...",
+    hints: [
+      "Loading the waterfall, keyboard, and note map.",
+      "Preparing the player so you can start practicing.",
+      "The piano blocks are lining up.",
+    ],
+  },
+  done: {
+    title: "Ready to play!",
+    hints: [
+      "Lesson created. Time to make the keyboard nervous.",
+      "All set — the notes are waiting.",
+      "Done. The practice stage is yours.",
+    ],
+  },
+};
+
+function pickRandomProgressHint(items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return "";
+  }
+
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+function progressCopyFor(stepKey) {
+  const copy = NEW_LESSON_PROGRESS_COPY[stepKey] || NEW_LESSON_PROGRESS_COPY.preparing;
+
+  return {
+    title: copy.title,
+    hint: pickRandomProgressHint(copy.hints),
+  };
+}
+
 
 function midiToToneNote(midiPitch) {
   return Tone.Frequency(midiPitch, "midi").toNote();
@@ -269,6 +361,7 @@ function App() {
   const [newLessonStatus, setNewLessonStatus] = useState("idle");
   const [newLessonError, setNewLessonError] = useState("");
   const [newLessonStep, setNewLessonStep] = useState("");
+  const [newLessonHint, setNewLessonHint] = useState("");
 
   const lessonMeta = lesson?.meta ?? {};
   const lessonDurationSeconds =
@@ -761,6 +854,13 @@ async function waitForLesson(jobId, attempts = 10) {
   throw lastError || new Error(`Lesson ${jobId} was not available yet.`);
 }
 
+function setNewLessonProgress(stepKey) {
+  const copy = progressCopyFor(stepKey);
+
+  setNewLessonStep(copy.title);
+  setNewLessonHint(copy.hint);
+}
+
 function resetNewLessonForm(sourceType = "youtube") {
   setNewLessonTitle("");
   setNewLessonTitleSource("auto");
@@ -769,6 +869,7 @@ function resetNewLessonForm(sourceType = "youtube") {
   setNewLessonSourceType(sourceType);
   setNewLessonStatus("idle");
   setNewLessonStep("");
+  setNewLessonHint("");
   setNewLessonError("");
 }
 
@@ -799,12 +900,12 @@ async function handleCreateNewLesson() {
   }
 
   setNewLessonStatus("running");
-  setNewLessonStep("Preparing lesson...");
+  setNewLessonProgress("preparing");
   setNewLessonError("");
 
   try {
     if (newLessonSourceType === "upload") {
-      setNewLessonStep("Uploading audio file...");
+      setNewLessonProgress("uploading");
 
       const uploadResult = await uploadAudioFile({
         file: newLessonFile,
@@ -815,7 +916,7 @@ async function handleCreateNewLesson() {
     }
 
     if (newLessonSourceType === "youtube") {
-      setNewLessonStep("Downloading YouTube audio...");
+      setNewLessonProgress("downloading");
 
       const shouldUseRemoteTitle = newLessonTitleSource === "auto";
 
@@ -832,7 +933,7 @@ async function handleCreateNewLesson() {
         setNewLessonTitle(title);
       }
     }
-    setNewLessonStep("Running AI transcription and analysis...");
+    setNewLessonProgress(useSourceSeparation ? "separating" : "transcribing");
 
     await runAudioToAnalysis({
       source,
@@ -854,7 +955,7 @@ async function handleCreateNewLesson() {
       await updatePipelineRunThumbnail(jobId, thumbnailUrl);
     }
 
-    setNewLessonStep("Saving lesson...");
+    setNewLessonProgress("saving");
 
     setTitleOverrides((previous) => ({
       ...previous,
@@ -863,7 +964,7 @@ async function handleCreateNewLesson() {
 
     await refreshPipelineRuns();
 
-    setNewLessonStep("Loading lesson...");
+    setNewLessonProgress("loading");
 
     const loadedLesson = await waitForLesson(jobId);
 
@@ -874,7 +975,7 @@ async function handleCreateNewLesson() {
     setCurrentLessonJobId(jobId);
     setScreenMode("lesson");
 
-    setNewLessonStep("Done!");
+    setNewLessonProgress("done");
     setNewLessonStatus("idle");
     setIsNewLessonOpen(false);
     resetNewLessonForm("youtube");
@@ -887,6 +988,7 @@ async function handleCreateNewLesson() {
   } catch (error) {
     setNewLessonStatus("error");
     setNewLessonStep("");
+    setNewLessonHint("");
     setNewLessonError(error.message || "Failed to create lesson.");
   }
 }
@@ -1459,8 +1561,8 @@ return (
                 <div className="new-lesson-processing-spinner" aria-hidden="true" />
 
                 <div>
-                  <strong>Processing lesson</strong>
-                  <span>{newLessonStep || "Working..."}</span>
+                  <strong>{newLessonStep || "Processing lesson"}</strong>
+                  <span>{newLessonHint || "Working..."}</span>
                 </div>
               </div>
             )}
