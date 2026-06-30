@@ -1,5 +1,5 @@
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
 export const DEFAULT_LESSON_JOB_ID =
   import.meta.env.VITE_LESSON_JOB_ID || "demo-morning-light-lesson";

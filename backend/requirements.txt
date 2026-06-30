@@ -24,7 +24,7 @@ typing-extensions>=4.15.0,<5.0
 music21==9.9.1
 
 # Audio Processing
-yt-dlp==2026.03.17
+yt-dlp==2026.06.09
 pydub==0.25.1
 librosa==0.10.2.post1
 soundfile==0.13.1
