@@ -13,6 +13,7 @@ from app.pipeline.resource_guard import gpu_sequential_guard
 from app.pipeline.source_separation import SourceSeparationResult, separate_sources
 from app.pipeline.tracer import run_tracer_bullet
 from app.pipeline.audio_preprocess import preprocess_audio_for_transcription
+from app.agent.transcription_agent import build_empty_agent_trace, run_bounded_transcription_agent
 
 
 @dataclass
@@ -31,6 +32,7 @@ class AudioToAnalysisPipelineResult:
     detected_key: str | None
     hvs_score: float | None
     error: str | None = None
+    agent: dict[str, Any] | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -297,6 +299,25 @@ def run_audio_to_analysis_pipeline(
 
         analysis_data = tracer_result.to_dict()
 
+        try:
+            agent_data = run_bounded_transcription_agent(
+                job_id=job_id,
+                artifacts_dir=artifacts_dir,
+                transcription=transcription_data,
+                analysis=analysis_data,
+                separation_quality=separation_quality_data,
+            )
+        except Exception as agent_error:
+            agent_data = build_empty_agent_trace(
+                job_id=job_id,
+                reason=(
+                    "Bounded transcription agent failed safely; "
+                    "pipeline kept the raw transcription artifact."
+                ),
+            )
+            agent_data["status"] = "failed_safe"
+            agent_data["error"] = f"{type(agent_error).__name__}: {agent_error}"
+
         if tracer_result.status != "completed":
             return AudioToAnalysisPipelineResult(
                 job_id=job_id,
@@ -313,6 +334,7 @@ def run_audio_to_analysis_pipeline(
                 detected_key=tracer_result.detected_key,
                 hvs_score=tracer_result.hvs_score,
                 error=tracer_result.error,
+                    agent=agent_data,
             )
 
         return AudioToAnalysisPipelineResult(
@@ -330,6 +352,7 @@ def run_audio_to_analysis_pipeline(
             detected_key=tracer_result.detected_key,
             hvs_score=tracer_result.hvs_score,
             error=None,
+                agent=agent_data,
         )
 
     except Exception as exc:
