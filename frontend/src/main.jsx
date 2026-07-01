@@ -5,6 +5,7 @@ import "./styles.css";
 import viewBlocksIcon from "./assets/view-blocks.png";
 import viewSheetIcon from "./assets/view-sheet.png";
 import viewMixIcon from "./assets/view-mix.png";
+import daiTuneLogo from "./assets/dai_tune_logo.png";
 import HandsControl from "./components/HandsControl.jsx";
 import { PianoKeyboard } from "./components/PianoKeyboard";
 import { WaterfallCanvas } from "./components/WaterfallCanvas";
@@ -30,80 +31,240 @@ import {
 
 const FALLBACK_DURATION_SECONDS = 4.2;
 
-const NEW_LESSON_PROGRESS_COPY = {
-  preparing: {
-    title: "Warming up the piano engine...",
-    hints: [
-      "Tuning the tiny digital piano inside your browser.",
-      "A good lesson starts with a clean signal and a little patience.",
-      "Getting the stage ready before the notes arrive.",
-    ],
+const LANGUAGE_STORAGE_KEY = "daiTuneLanguage";
+
+const UI_COPY = {
+  en: {
+    "brand.name": "DaiTune",
+    "brand.eyebrow": "Local-first piano tutor",
+    "brand.subtitle": "Create, continue, and manage your piano lessons.",
+
+    "common.close": "Close",
+    "common.cancel": "Cancel",
+    "common.create": "Create",
+    "common.working": "Working...",
+    "common.play": "Play",
+    "common.pause": "Pause",
+    "common.reset": "Reset",
+    "common.saved": "saved",
+    "common.unknown": "Unknown",
+    "common.delete": "Delete",
+    "common.rename": "Rename",
+
+    "home.continueLatest": "Continue latest",
+    "home.newLesson": "+ New lesson",
+    "home.quickStart": "Quick start",
+    "home.title": "Your piano lesson library",
+    "home.description": "Paste a YouTube link or upload an audio file to create a local interactive piano lesson.",
+    "home.pasteYoutube": "Paste YouTube link...",
+    "home.add": "Add →",
+    "home.upload": "Upload MP3 / WAV",
+    "home.library": "Library",
+    "home.yourLessons": "Your lessons",
+
+    "drawer.menu": "Menu",
+    "drawer.home": "Home page",
+    "drawer.homeHint": "Lesson library and quick start",
+    "drawer.newLessonHint": "Create from YouTube, MP3 or WAV",
+    "drawer.currentLesson": "Current lesson",
+    "drawer.savedLessons": "Saved lessons",
+
+    "view.blocks": "Blocks",
+    "view.sheet": "Sheet",
+    "view.mix": "Mix",
+
+    "player.label": "Player",
+    "player.playLesson": "Play lesson",
+    "player.pausePlayback": "Pause playback",
+
+    "summary.reviewNotes": "Review notes",
+    "summary.unknownConfidence": "Unknown confidence",
+    "summary.fallback": "Using local fallback notes",
+
+    "modal.createEyebrow": "Create",
+    "modal.newLesson": "New lesson",
+    "modal.lessonTitle": "Lesson title",
+    "modal.titlePlaceholder": "Title",
+    "modal.titleAutoHint": "Title can be filled automatically from YouTube metadata.",
+    "modal.titleCustomHint": "Custom title will be kept.",
+    "modal.youtubeUrl": "YouTube URL",
+    "modal.uploadFile": "Upload file",
+    "modal.audioFile": "Audio file",
+    "modal.audioSource": "Audio source",
+    "modal.youtubePlaceholder": "https://www.youtube.com/watch?v=...",
+    "modal.sourcePlaceholder": "data/processed/yt-MZter9IuEO4/input.wav",
+    "modal.preprocessing": "Audio preprocessing",
+    "modal.preprocessingHint": "Safe cleanup before transcription",
+    "modal.trimSilence": "Trim leading silence",
+    "modal.trimSilenceHint": "Remove quiet silence at the start of the audio.",
+    "modal.normalize": "Normalize volume",
+    "modal.normalizeHint": "Make quiet or loud recordings more consistent.",
+    "modal.highpass": "High-pass rumble filter",
+    "modal.highpassHint": "Reduce low-frequency noise before transcription.",
+    "modal.sourceSeparation": "Use source separation",
+    "modal.sourceSeparationHint": "Slower, but useful for songs with vocals or full instrumental mixes.",
+    "modal.processingFallbackTitle": "Processing lesson",
+    "modal.processingFallbackHint": "Working...",
+    "modal.createLesson": "Create lesson",
+    "modal.lessonNamePrompt": "Lesson name",
+
+    "controls.tempo": "Tempo",
+    "controls.display": "Display",
+    "controls.blank": "Blank",
+    "controls.symbol": "♪",
+    "controls.notes": "Notes",
+    "controls.raw": "Raw",
+    "controls.practice": "Practice",
+    "controls.keys": "Keys",
+    "controls.off": "Off",
+    "controls.all": "All",
+    "controls.lowConfidence": "Low conf.",
+
+    "delete.confirmTitle": "Delete",
+    "delete.confirmBody": "This will remove it from your saved lessons.",
+    "errors.deleteFailed": "Failed to delete lesson.",
+    "errors.enterTitle": "Please enter a lesson title.",
+    "errors.chooseFile": "Please choose a .wav or .mp3 file.",
+    "errors.enterSource": "Please enter a source.",
   },
-  uploading: {
-    title: "Uploading your audio...",
-    hints: [
-      "Moving your recording into the lesson pipeline.",
-      "Keeping the audio safe before the AI starts listening.",
-      "Your file is taking the scenic route to the analyzer.",
-    ],
-  },
-  downloading: {
-    title: "Downloading the performance...",
-    hints: [
-      "Pulling the audio track and leaving the video drama behind.",
-      "Grabbing the sound so the piano blocks can do their thing.",
-      "Fun fact: piano covers are basically sheet music wearing headphones.",
-    ],
-  },
-  separating: {
-    title: "Separating instruments...",
-    hints: [
-      "Demucs is trying to give the piano its own spotlight.",
-      "This step is slower because the AI is splitting the mix into stems.",
-      "Tiny studio engineer mode: vocals, drums, bass, other.",
-    ],
-  },
-  transcribing: {
-    title: "Listening for notes...",
-    hints: [
-      "Basic Pitch is turning sound into MIDI notes.",
-      "The AI is hunting for note starts, endings, and pitches.",
-      "Fun fact: middle C is usually called C4 in scientific pitch notation.",
-    ],
-  },
-  analyzing: {
-    title: "Analyzing harmony...",
-    hints: [
-      "Looking for the key, note confidence, and musical structure.",
-      "The notes are becoming an interactive lesson.",
-      "Almost there — the harmony detective is working.",
-    ],
-  },
-  saving: {
-    title: "Saving your lesson...",
-    hints: [
-      "Packing notes, metadata, and results into your library.",
-      "Adding this lesson to your practice shelf.",
-      "Making sure the lesson survives the refresh button.",
-    ],
-  },
-  loading: {
-    title: "Opening your lesson...",
-    hints: [
-      "Loading the waterfall, keyboard, and note map.",
-      "Preparing the player so you can start practicing.",
-      "The piano blocks are lining up.",
-    ],
-  },
-  done: {
-    title: "Ready to play!",
-    hints: [
-      "Lesson created. Time to make the keyboard nervous.",
-      "All set — the notes are waiting.",
-      "Done. The practice stage is yours.",
-    ],
+
+  bg: {
+    "brand.name": "DaiTune",
+    "brand.eyebrow": "Локален пиано помощник",
+    "brand.subtitle": "Създавай и управлявай своите пиано уроци.",
+
+    "common.close": "Затвори",
+    "common.cancel": "Отказ",
+    "common.create": "Създай",
+    "common.working": "Работи...",
+    "common.play": "Старт",
+    "common.pause": "Пауза",
+    "common.reset": "Нулирай",
+    "common.saved": "запазени",
+    "common.unknown": "Неизвестно",
+    "common.delete": "Изтрий",
+    "common.rename": "Преименувай",
+
+    "home.continueLatest": "Продължи последния",
+    "home.newLesson": "+ Нов урок",
+    "home.quickStart": "Бърз старт",
+    "home.title": "Твоята библиотека с пиано уроци",
+    "home.description": "Постави YouTube линк или качи аудио файл, за да създадеш локален интерактивен урок.",
+    "home.pasteYoutube": "Постави YouTube линк...",
+    "home.add": "Добави →",
+    "home.upload": "Качи MP3 / WAV",
+    "home.library": "Библиотека",
+    "home.yourLessons": "Твоите уроци",
+
+    "drawer.menu": "Меню",
+    "drawer.home": "Начало",
+    "drawer.homeHint": "Библиотека с уроци и бърз старт",
+    "drawer.newLessonHint": "Създай от YouTube, MP3 или WAV",
+    "drawer.currentLesson": "Текущ урок",
+    "drawer.savedLessons": "Запазени уроци",
+
+    "view.blocks": "Блокове",
+    "view.sheet": "Партитура",
+    "view.mix": "Смесено",
+
+    "player.label": "Плеър",
+    "player.playLesson": "Пусни урока",
+    "player.pausePlayback": "Пауза",
+
+    "summary.reviewNotes": "Ноти за преглед",
+    "summary.unknownConfidence": "Неизвестна увереност",
+    "summary.fallback": "Използват се локални примерни ноти",
+
+    "modal.createEyebrow": "Създаване",
+    "modal.newLesson": "Нов урок",
+    "modal.lessonTitle": "Заглавие на урока",
+    "modal.titlePlaceholder": "Заглавие",
+    "modal.titleAutoHint": "Заглавието може да се попълни автоматично от YouTube metadata.",
+    "modal.titleCustomHint": "Персонализираното заглавие ще бъде запазено.",
+    "modal.youtubeUrl": "YouTube линк",
+    "modal.uploadFile": "Качи файл",
+    "modal.audioFile": "Аудио файл",
+    "modal.audioSource": "Аудио източник",
+    "modal.youtubePlaceholder": "https://www.youtube.com/watch?v=...",
+    "modal.sourcePlaceholder": "data/processed/yt-MZter9IuEO4/input.wav",
+    "modal.preprocessing": "Аудио обработка",
+    "modal.preprocessingHint": "Безопасно почистване преди транскрипция",
+    "modal.trimSilence": "Изрязване на начална тишина",
+    "modal.trimSilenceHint": "Премахва тиха пауза в началото на аудиото.",
+    "modal.normalize": "Нормализиране на звука",
+    "modal.normalizeHint": "Прави тихите и силните записи по-равномерни.",
+    "modal.highpass": "High-pass филтър",
+    "modal.highpassHint": "Намалява нискочестотния шум преди транскрипция.",
+    "modal.sourceSeparation": "Използвай разделяне на инструменти",
+    "modal.sourceSeparationHint": "По-бавно, но полезно за песни с вокали или пълен инструментал.",
+    "modal.processingFallbackTitle": "Обработка на урока",
+    "modal.processingFallbackHint": "Работи...",
+    "modal.createLesson": "Създай урок",
+    "modal.lessonNamePrompt": "Име на урока",
+
+    "controls.tempo": "Темпо",
+    "controls.display": "Показване",
+    "controls.blank": "Празно",
+    "controls.symbol": "♪",
+    "controls.notes": "Ноти",
+    "controls.raw": "Сурови",
+    "controls.practice": "Упражнение",
+    "controls.keys": "Клавиши",
+    "controls.off": "Изкл.",
+    "controls.all": "Всички",
+    "controls.lowConfidence": "Ниска увереност",
+
+    "delete.confirmTitle": "Изтриване",
+    "delete.confirmBody": "Това ще премахне урока от запазените уроци.",
+    "errors.deleteFailed": "Неуспешно изтриване на урока.",
+    "errors.enterTitle": "Моля, въведи заглавие на урока.",
+    "errors.chooseFile": "Моля, избери .wav или .mp3 файл.",
+    "errors.enterSource": "Моля, въведи източник.",
   },
 };
+
+const PROGRESS_COPY = {
+  en: {
+    preparing: ["Warming up the piano engine...", "Tuning the tiny digital piano inside your browser."],
+    uploading: ["Uploading your audio...", "Moving your recording into the lesson pipeline."],
+    downloading: ["Downloading the performance...", "Pulling the audio track and leaving the video drama behind."],
+    separating: ["Separating instruments...", "Demucs is giving the piano its own spotlight."],
+    transcribing: ["Listening for notes...", "Basic Pitch is turning sound into MIDI notes."],
+    analyzing: ["Analyzing harmony...", "The harmony detective is working."],
+    saving: ["Saving your lesson...", "Adding this lesson to your practice shelf."],
+    loading: ["Opening your lesson...", "The piano blocks are lining up."],
+    done: ["Ready to play!", "The practice stage is yours."],
+  },
+  bg: {
+    preparing: ["Подгряваме пиано двигателя...", "Настройваме малкото дигитално пиано в браузъра."],
+    uploading: ["Качваме аудиото...", "Преместваме записа към lesson pipeline-а."],
+    downloading: ["Сваляме изпълнението...", "Взимаме звука и оставяме видео драмата настрани."],
+    separating: ["Разделяме инструментите...", "Demucs се опитва да даде собствен прожектор на пианото."],
+    transcribing: ["Слушаме за ноти...", "Basic Pitch превръща звука в MIDI ноти."],
+    analyzing: ["Анализираме хармонията...", "Музикалният детектив работи."],
+    saving: ["Запазваме урока...", "Добавяме урока към твоята библиотека."],
+    loading: ["Отваряме урока...", "Пиано блокчетата се подреждат."],
+    done: ["Готово за свирене!", "Сцената за упражнение е твоя."],
+  },
+};
+
+function resolveInitialLanguage() {
+  try {
+    const savedLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+
+    if (savedLanguage === "bg" || savedLanguage === "en") {
+      return savedLanguage;
+    }
+  } catch {
+    // Ignore localStorage issues.
+  }
+
+  return "en";
+}
+
+function getCopy(language, key) {
+  return UI_COPY[language]?.[key] || UI_COPY.en[key] || key;
+}
 
 function pickRandomProgressHint(items) {
   if (!Array.isArray(items) || items.length === 0) {
@@ -113,13 +274,32 @@ function pickRandomProgressHint(items) {
   return items[Math.floor(Math.random() * items.length)];
 }
 
-function progressCopyFor(stepKey) {
-  const copy = NEW_LESSON_PROGRESS_COPY[stepKey] || NEW_LESSON_PROGRESS_COPY.preparing;
+function progressCopyFor(stepKey, language = "en") {
+  const pair =
+    PROGRESS_COPY[language]?.[stepKey] ||
+    PROGRESS_COPY.en[stepKey] ||
+    PROGRESS_COPY.en.preparing;
 
   return {
-    title: copy.title,
-    hint: pickRandomProgressHint(copy.hints),
+    title: pair[0],
+    hint: pickRandomProgressHint(pair.slice(1)),
   };
+}
+
+function LanguageToggle({ language, onToggle }) {
+  const nextLanguageLabel = language === "en" ? "BG" : "EN";
+
+  return (
+    <button
+      type="button"
+      className="language-toggle-button"
+      onClick={onToggle}
+      aria-label={language === "en" ? "Switch to Bulgarian" : "Switch to English"}
+      title={language === "en" ? "Switch to Bulgarian" : "Switch to English"}
+    >
+      {nextLanguageLabel}
+    </button>
+  );
 }
 
 
@@ -451,6 +631,16 @@ function App() {
   const [newLessonError, setNewLessonError] = useState("");
   const [newLessonStep, setNewLessonStep] = useState("");
   const [newLessonHint, setNewLessonHint] = useState("");
+  const [language, setLanguage] = useState(resolveInitialLanguage);
+
+  const t = React.useCallback(
+    (key) => getCopy(language, key),
+    [language]
+  );
+
+  const toggleLanguage = React.useCallback(() => {
+    setLanguage((currentLanguage) => (currentLanguage === "en" ? "bg" : "en"));
+  }, []);
 
   const lessonMeta = lesson?.meta ?? {};
   const lessonDurationSeconds =
@@ -577,6 +767,10 @@ function App() {
   useEffect(() => {
       localStorage.setItem("lessonTitleOverrides", JSON.stringify(titleOverrides));
     }, [titleOverrides]);
+
+  useEffect(() => {
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+  }, [language]);
 
     useEffect(() => {
     let cancelled = false;
@@ -867,7 +1061,7 @@ function App() {
  function handleRenameLessonByJobId(jobId, currentTitle) {
   if (!jobId) return;
 
-  const nextTitle = window.prompt("Lesson name", currentTitle);
+  const nextTitle = window.prompt(t("modal.lessonNamePrompt"), currentTitle);
 
   if (nextTitle === null) {
     return;
@@ -891,7 +1085,7 @@ async function handleDeleteLessonByJobId(jobId, title) {
   }
 
   const confirmed = window.confirm(
-    `Delete "${title}"?\n\nThis will remove it from your saved lessons.`
+    `${t("delete.confirmTitle")} "${title}"?\n\n${t("delete.confirmBody")}`
   );
 
   if (!confirmed) {
@@ -920,7 +1114,7 @@ async function handleDeleteLessonByJobId(jobId, title) {
       setLessonLoadStatus("fallback");
     }
   } catch (error) {
-    window.alert(error.message || "Failed to delete lesson.");
+    window.alert(error.message || t("errors.deleteFailed"));
   }
 }
 
@@ -944,7 +1138,7 @@ async function waitForLesson(jobId, attempts = 10) {
 }
 
 function setNewLessonProgress(stepKey) {
-  const copy = progressCopyFor(stepKey);
+  const copy = progressCopyFor(stepKey, language);
 
   setNewLessonStep(copy.title);
   setNewLessonHint(copy.hint);
@@ -972,7 +1166,7 @@ async function handleCreateNewLesson() {
   }
 
   if (!title) {
-    setNewLessonError("Please enter a lesson title.");
+    setNewLessonError(t("errors.enterTitle"));
     return;
   }
 
@@ -980,11 +1174,11 @@ async function handleCreateNewLesson() {
 
   if (newLessonSourceType === "upload") {
     if (!newLessonFile) {
-      setNewLessonError("Please choose a .wav or .mp3 file.");
+      setNewLessonError(t("errors.chooseFile"));
       return;
     }
   } else if (!source) {
-    setNewLessonError("Please enter a source.");
+    setNewLessonError(t("errors.enterSource"));
     return;
   }
 
@@ -1099,7 +1293,7 @@ return (
             </button>
 
             <div className="lesson-heading-block">
-              <p className="eyebrow">AI Music Tutor</p>
+              <p className="eyebrow">DaiTune</p>
 
               <div className="lesson-title-row">
                 <h1 className="lesson-title">{lessonTitle}</h1>
@@ -1117,12 +1311,12 @@ return (
               <p className="lesson-subtitle">{lessonSubtitle}</p>
 
               {lessonLoadStatus === "fallback" && (
-                <p className="lesson-load-status">Using local fallback notes</p>
+                <p className="lesson-load-status">{t("summary.fallback")}</p>
               )}
 
               <div className="lesson-ai-summary" aria-label="AI lesson summary">
-                <span>Review notes: {reviewNoteCount}</span>
-                <span>Unknown confidence: {unknownConfidenceCount}</span>
+                <span>{t("summary.reviewNotes")}: {reviewNoteCount}</span>
+                <span>{t("summary.unknownConfidence")}: {unknownConfidenceCount}</span>
               </div>
             </div>
           </div>
@@ -1136,7 +1330,7 @@ return (
                 aria-pressed={viewMode === "blocks"}
               >
                 <img src={viewBlocksIcon} alt="" className="view-mode-image" aria-hidden="true" />
-                <span className="view-mode-label">Blocks</span>
+                <span className="view-mode-label">{t("view.blocks")}</span>
               </button>
 
               <button
@@ -1146,7 +1340,7 @@ return (
                 aria-pressed={viewMode === "sheet"}
               >
                 <img src={viewSheetIcon} alt="" className="view-mode-image" aria-hidden="true" />
-                <span className="view-mode-label">Sheet</span>
+                <span className="view-mode-label">{t("view.sheet")}</span>
               </button>
 
               <button
@@ -1156,19 +1350,21 @@ return (
                 aria-pressed={viewMode === "mix"}
               >
                 <img src={viewMixIcon} alt="" className="view-mode-image" aria-hidden="true" />
-                <span className="view-mode-label">Mix</span>
+                <span className="view-mode-label">{t("view.mix")}</span>
               </button>
             </div>
           </div>
 
           <div className="top-right">
+            <LanguageToggle language={language} onToggle={toggleLanguage} />
+
             <div className="lesson-player-bar">
               <button
                 type="button"
                 className="lesson-player-toggle"
                 onClick={togglePlayback}
-                aria-label={isPlaying ? "Pause playback" : "Play lesson"}
-                title={isPlaying ? "Pause" : "Play"}
+                aria-label={isPlaying ? t("player.pausePlayback") : t("player.playLesson")}
+                title={isPlaying ? t("common.pause") : t("common.play")}
               >
                 <span className={`lesson-player-toggle-icon ${isPlaying ? "is-pause" : "is-play"}`}>
                   {isPlaying ? "❚❚" : "▶"}
@@ -1177,7 +1373,7 @@ return (
 
               <div className="lesson-player-main">
                 <div className="lesson-player-time-row">
-                  <span className="lesson-player-label">Player</span>
+                  <span className="lesson-player-label">{t("player.label")}</span>
                   <strong>
                     {formatPlaybackTime(musicalTime)} / {formatPlaybackTime(lessonDuration)}
                   </strong>
@@ -1204,18 +1400,20 @@ return (
         {screenMode === "home" && (
       <header className="home-app-header">
         <div className="home-brand-block">
-          <div className="home-logo-slot" aria-label="AI Music Tutor logo">
-            <span>AMT</span>
+          <div className="home-logo-slot" aria-label="DaiTune logo">
+            <img src={daiTuneLogo} alt="DaiTune logo" />
           </div>
 
           <div>
-            <p className="eyebrow">Local-first piano tutor</p>
-            <h1>AI Music Tutor</h1>
-            <span>Create, continue, and manage your piano lessons.</span>
+            <p className="eyebrow">{t("brand.eyebrow")}</p>
+            <h1>DaiTune</h1>
+            <span>{t("brand.subtitle")}</span>
           </div>
         </div>
 
         <div className="home-header-actions">
+          <LanguageToggle language={language} onToggle={toggleLanguage} />
+
           <button
             type="button"
             className="secondary-control"
@@ -1226,7 +1424,7 @@ return (
               }
             }}
           >
-            Continue latest
+            {t("home.continueLatest")}
           </button>
 
           <button
@@ -1237,7 +1435,7 @@ return (
               setIsNewLessonOpen(true);
             }}
           >
-            + New lesson
+            {t("home.newLesson")}
           </button>
         </div>
       </header>
@@ -1253,13 +1451,13 @@ return (
 
             <aside className="sessions-drawer" role="dialog" aria-label="Application menu">
               <div className="sessions-drawer-header drawer-header-with-logo">
-                <div className="drawer-logo-slot" aria-label="AI Music Tutor logo">
-                  <span>AMT</span>
+                <div className="drawer-logo-slot" aria-label="DaiTune logo">
+                  <img src={daiTuneLogo} alt="DaiTune logo" />
                 </div>
 
                 <div className="drawer-header-copy">
-                  <p className="sessions-drawer-eyebrow">AI Music Tutor</p>
-                  <h2>Menu</h2>
+                  <p className="sessions-drawer-eyebrow">DaiTune</p>
+                  <h2>{t("drawer.menu")}</h2>
                 </div>
 
                 <button
@@ -1287,8 +1485,8 @@ return (
                   </span>
 
                   <span className="drawer-nav-copy">
-                    <strong>Home page</strong>
-                    <small>Lesson library and quick start</small>
+                    <strong>{t("drawer.home")}</strong>
+                    <small>{t("drawer.homeHint")}</small>
                   </span>
                 </button>
 
@@ -1305,8 +1503,8 @@ return (
                   </span>
 
                   <span className="drawer-nav-copy">
-                    <strong>New lesson</strong>
-                    <small>Create from YouTube, MP3 or WAV</small>
+                    <strong>{t("modal.newLesson")}</strong>
+                    <small>{t("drawer.newLessonHint")}</small>
                   </span>
                 </button>
               </section>
@@ -1317,7 +1515,7 @@ return (
                     <CurrentLessonIcon />
                   </span>
 
-                  <span>Current lesson</span>
+                  <span>{t("drawer.currentLesson")}</span>
                 </div>
 
                 <div
@@ -1367,7 +1565,7 @@ return (
                   <span className="drawer-section-title-icon">
                     <SavedLessonsIcon />
                   </span>
-                  <span>Saved lessons</span>
+                  <span>{t("drawer.savedLessons")}</span>
                   <strong>{pipelineRuns.length}</strong>
                 </div>
 
@@ -1444,8 +1642,8 @@ return (
           <section className="new-lesson-modal" role="dialog" aria-label="Create new lesson">
             <div className="new-lesson-modal-header">
               <div>
-                <p className="sessions-drawer-eyebrow">Create</p>
-                <h2>New lesson</h2>
+                <p className="sessions-drawer-eyebrow">{t("modal.createEyebrow")}</p>
+                <h2>{t("modal.newLesson")}</h2>
               </div>
 
               <button
@@ -1459,7 +1657,7 @@ return (
             </div>
 
             <label className="new-lesson-field">
-              <span>Lesson title</span>
+              <span>{t("modal.lessonTitle")}</span>
 
               <input
                 value={newLessonTitle ?? ""}
@@ -1467,13 +1665,13 @@ return (
                   setNewLessonTitle(event.target.value ?? "");
                   setNewLessonTitleSource("user");
                 }}
-                placeholder="Title"
+                placeholder={t("modal.titlePlaceholder")}
               />
 
               <small className="new-lesson-field-hint">
                 {newLessonTitleSource === "auto"
-                  ? "Title can be filled automatically from YouTube metadata."
-                  : "Custom title will be kept."}
+                  ? t("modal.titleAutoHint")
+                  : t("modal.titleCustomHint")}
               </small>
             </label>
 
@@ -1485,7 +1683,7 @@ return (
                   resetNewLessonForm("youtube");
                 }}
               >
-                YouTube URL
+                {t("modal.youtubeUrl")}
               </button>
 
               <button
@@ -1495,13 +1693,13 @@ return (
                   resetNewLessonForm("upload");
                 }}
               >
-                Upload file
+                {t("modal.uploadFile")}
               </button>
             </div>
 
           {newLessonSourceType === "upload" ? (
             <label className="new-lesson-field">
-              <span>Audio file</span>
+              <span>{t("modal.audioFile")}</span>
               <input
                 type="file"
                 accept=".wav,.mp3,audio/wav,audio/mpeg"
@@ -1518,7 +1716,7 @@ return (
             </label>
           ) : (
             <label className="new-lesson-field">
-              <span>{newLessonSourceType === "youtube" ? "YouTube URL" : "Audio source"}</span>
+              <span>{newLessonSourceType === "youtube" ? t("modal.youtubeUrl") : t("modal.audioSource")}</span>
              <input
                 value={newLessonSource ?? ""}
                 onChange={(event) => {
@@ -1539,8 +1737,8 @@ return (
                 }}
                 placeholder={
                   newLessonSourceType === "youtube"
-                    ? "https://www.youtube.com/watch?v=..."
-                    : "data/processed/yt-MZter9IuEO4/input.wav"
+                    ? t("modal.youtubePlaceholder")
+                    : t("modal.sourcePlaceholder")
                 }
               />
             </label>
@@ -1556,8 +1754,8 @@ return (
                   />
 
                   <span>
-                    <strong>Audio preprocessing</strong>
-                    <small>Safe cleanup before transcription</small>
+                    <strong>{t("modal.preprocessing")}</strong>
+                    <small>{t("modal.preprocessingHint")}</small>
                   </span>
                 </label>
 
@@ -1586,8 +1784,8 @@ return (
                       onChange={() => toggleAudioPreprocessOption("trim_silence")}
                     />
                     <span>
-                      <strong>Trim leading silence</strong>
-                      <small>Remove quiet silence at the start of the audio.</small>
+                      <strong>{t("modal.trimSilence")}</strong>
+                      <small>{t("modal.trimSilenceHint")}</small>
                     </span>
                   </label>
 
@@ -1598,8 +1796,8 @@ return (
                       onChange={() => toggleAudioPreprocessOption("normalize_audio")}
                     />
                     <span>
-                      <strong>Normalize volume</strong>
-                      <small>Make quiet or loud recordings more consistent.</small>
+                      <strong>{t("modal.normalize")}</strong>
+                      <small>{t("modal.normalizeHint")}</small>
                     </span>
                   </label>
 
@@ -1610,8 +1808,8 @@ return (
                       onChange={() => toggleAudioPreprocessOption("highpass_filter")}
                     />
                     <span>
-                      <strong>High-pass rumble filter</strong>
-                      <small>Reduce low-frequency noise before transcription.</small>
+                      <strong>{t("modal.highpass")}</strong>
+                      <small>{t("modal.highpassHint")}</small>
                     </span>
                   </label>
                 </div>
@@ -1627,9 +1825,9 @@ return (
                 />
 
                 <span>
-                  <strong>Use source separation</strong>
+                  <strong>{t("modal.sourceSeparation")}</strong>
                   <small>
-                    Slower, but useful for songs with vocals or full instrumental mixes.
+                    {t("modal.sourceSeparationHint")}
                   </small>
                 </span>
               </label>
@@ -1640,8 +1838,8 @@ return (
                 <div className="new-lesson-processing-spinner" aria-hidden="true" />
 
                 <div>
-                  <strong>{newLessonStep || "Processing lesson"}</strong>
-                  <span>{newLessonHint || "Working..."}</span>
+                  <strong>{newLessonStep || t("modal.processingFallbackTitle")}</strong>
+                  <span>{newLessonHint || t("modal.processingFallbackHint")}</span>
                 </div>
               </div>
             )}
@@ -1657,7 +1855,7 @@ return (
                 onClick={() => setIsNewLessonOpen(false)}
                 disabled={newLessonStatus === "running"}
               >
-                Cancel
+                {t("common.cancel")}
               </button>
 
               <button
@@ -1666,7 +1864,7 @@ return (
                 onClick={handleCreateNewLesson}
                 disabled={newLessonStatus === "running"}
               >
-                {newLessonStatus === "running" ? "Working..." : "Create lesson"}
+                {newLessonStatus === "running" ? t("common.working") : t("modal.createLesson")}
               </button>
             </div>
           </section>
@@ -1677,10 +1875,10 @@ return (
         <section className="home-screen">
           <div className="home-hero-card">
             <div className="home-hero-copy">
-              <p className="eyebrow">Quick start</p>
-              <h1>Your piano lesson library</h1>
+              <p className="eyebrow">{t("home.quickStart")}</p>
+              <h1>{t("home.title")}</h1>
               <p>
-                Paste a YouTube link or upload an audio file to create a local interactive piano lesson.
+                {t("home.description")}
               </p>
             </div>
 
@@ -1702,7 +1900,7 @@ return (
                       }
                     }
                   }}
-                  placeholder="Paste YouTube link..."
+                  placeholder={t("home.pasteYoutube")}
                 />
 
                 <button
@@ -1713,7 +1911,7 @@ return (
                     setIsNewLessonOpen(true);
                   }}
                 >
-                  Add →
+                  {t("home.add")}
                 </button>
               </div>
 
@@ -1725,7 +1923,7 @@ return (
                   setIsNewLessonOpen(true);
                 }}
               >
-                Upload MP3 / WAV
+                {t("home.upload")}
               </button>
             </div>
           </div>
@@ -1733,11 +1931,11 @@ return (
           <section className="home-library-section">
             <div className="home-section-header">
               <div>
-                <p className="eyebrow">Library</p>
-                <h2>Your lessons</h2>
+                <p className="eyebrow">{t("home.library")}</p>
+                <h2>{t("home.yourLessons")}</h2>
               </div>
 
-              <span>{pipelineRuns.length} saved</span>
+              <span>{pipelineRuns.length} {t("common.saved")}</span>
             </div>
 
             <div className="home-lessons-grid">
@@ -1862,16 +2060,16 @@ return (
         <footer className="controls-card controls-card-polished">
           <div className="transport-group controls-transport-section">
             <button className="primary-control" onClick={togglePlayback}>
-              {isPlaying ? "Pause" : "Play"}
+              {isPlaying ? t("common.pause") : t("common.play")}
             </button>
 
             <button className="secondary-control" onClick={resetPlayback}>
-              Reset
+              {t("common.reset")}
             </button>
           </div>
 
           <label className="tempo-control controls-tempo-section">
-            <span>Tempo</span>
+            <span>{t("controls.tempo")}</span>
 
             <input
               type="range"
@@ -1886,7 +2084,7 @@ return (
           </label>
 
           <div className="mini-control-pill display-pill" aria-label="Note display mode">
-            <span className="mini-mode-label">Display</span>
+            <span className="mini-mode-label">{t("controls.display")}</span>
 
             <div className="mini-mode-switch">
               <button
@@ -1919,7 +2117,7 @@ return (
             className="mini-control-pill notes-view-pill notes-pill"
             aria-label="Note view mode"
           >
-            <span className="mini-mode-label">Notes</span>
+            <span className="mini-mode-label">{t("controls.notes")}</span>
 
             <div className="mini-mode-switch">
               <button
@@ -1941,7 +2139,7 @@ return (
           </div>
 
           <div className="mini-control-pill keys-pill" aria-label="Keyboard label mode">
-            <span className="mini-mode-label">Keys</span>
+            <span className="mini-mode-label">{t("controls.keys")}</span>
 
             <div className="mini-mode-switch">
               <button
@@ -1974,21 +2172,6 @@ return (
             activeHand={activeHand}
             onChange={setActiveHand}
           />
-
-          <div className="controls-status-section">
-            <div
-              className="compact-confidence-pill"
-              title="Dashed blocks show low confidence notes"
-              aria-label="Dashed blocks show low confidence notes"
-            >
-              <span className="compact-confidence-sample" aria-hidden="true" />
-              <span>Low conf.</span>
-            </div>
-
-            <div className="compact-time-pill">
-              {currentTime.toFixed(2)}s
-            </div>
-          </div>
         </footer>
         )}
       </section>
