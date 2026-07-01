@@ -31,7 +31,7 @@ services:
       dockerfile: Dockerfile
     container_name: amt-backend
     ports:
-      - "8000:8000"
+      - "8080:8000"
     volumes:
       - ./data:/app/data
       - ./backend/app:/app/app

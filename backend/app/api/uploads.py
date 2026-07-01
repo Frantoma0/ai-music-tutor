@@ -1,10 +1,11 @@
+import json
 import shutil
 import subprocess
-from typing import Any
 from pathlib import Path
 from re import sub
+from typing import Any
+from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
-import json
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
@@ -13,33 +14,121 @@ router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 
 UPLOAD_ROOT = Path("data/uploads")
 ALLOWED_AUDIO_EXTENSIONS = {".wav", ".mp3"}
+MAX_UPLOAD_BYTES = 80 * 1024 * 1024
+MAX_YOUTUBE_URL_LENGTH = 2048
+
+YTDLP_BIN = "/usr/local/bin/yt-dlp"
+YTDLP_FORMAT = "140/251/139/249/bestaudio/best/18"
+YTDLP_PLAYER_CLIENTS = "youtube:player_client=web,android,mweb"
+
+PROTECTED_MARKERS = [
+    "drm",
+    "private video",
+    "sign in",
+    "copyright",
+    "not available",
+    "unavailable",
+    "members-only",
+    "age-restricted",
+    "this video is not available",
+    "requested format is not available",
+    "only images are available",
+    "po token",
+    "http error 403",
+]
+
+ALLOWED_YOUTUBE_HOSTS = {
+    "youtube.com",
+    "www.youtube.com",
+    "m.youtube.com",
+    "music.youtube.com",
+    "youtu.be",
+}
 
 
 def safe_name(value: str) -> str:
     cleaned = sub(r"[^a-zA-Z0-9._-]+", "-", value.strip())
-    return cleaned.strip("-") or "audio"
+    cleaned = cleaned.strip("-") or "audio"
+    return cleaned[:96]
+
+
+def raise_bad_request(message: str) -> None:
+    raise HTTPException(status_code=400, detail=message)
+
+
+def validate_youtube_url(value: str) -> str:
+    url = str(value or "").strip()
+
+    if not url:
+        raise_bad_request("Missing YouTube URL.")
+
+    if len(url) > MAX_YOUTUBE_URL_LENGTH:
+        raise_bad_request("The YouTube URL is too long.")
+
+    parsed = urlparse(url)
+
+    if parsed.scheme not in {"http", "https"}:
+        raise_bad_request("Only http or https YouTube links are supported.")
+
+    if "@" in parsed.netloc:
+        raise_bad_request("Invalid YouTube URL.")
+
+    host = parsed.hostname.lower() if parsed.hostname else ""
+
+    if host not in ALLOWED_YOUTUBE_HOSTS:
+        raise_bad_request("Only public YouTube links from youtube.com or youtu.be are supported.")
+
+    video_id = ""
+
+    if host == "youtu.be":
+        video_id = parsed.path.strip("/").split("/")[0]
+    else:
+        path = parsed.path.rstrip("/")
+
+        if path == "/watch":
+            video_id = parse_qs(parsed.query).get("v", [""])[0]
+        elif path.startswith("/shorts/"):
+            video_id = path.split("/shorts/", 1)[1].split("/")[0]
+        elif path.startswith("/embed/"):
+            video_id = path.split("/embed/", 1)[1].split("/")[0]
+
+    if not video_id or not sub(r"^[a-zA-Z0-9_-]{11}$", "", video_id) == "":
+        raise_bad_request("Invalid YouTube video link. Please paste a normal public video URL.")
+
+    return f"https://www.youtube.com/watch?v={video_id}"
+
+
+def run_ytdlp_command(command: list[str], timeout: int) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+
 
 def read_youtube_metadata(url: str) -> dict[str, str | None]:
     metadata_command = [
-        "/usr/local/bin/yt-dlp",
+        YTDLP_BIN,
         "--js-runtimes",
         "deno",
         "--skip-download",
         "--no-playlist",
         "--dump-single-json",
         "--extractor-args",
-        "youtube:player_client=web,android,mweb",
+        YTDLP_PLAYER_CLIENTS,
         url,
     ]
 
     try:
-        result = subprocess.run(
-            metadata_command,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=30,
-        )
+        result = run_ytdlp_command(metadata_command, timeout=30)
+
+        if result.returncode != 0:
+            return {
+                "title": None,
+                "thumbnail_url": None,
+            }
 
         data = json.loads(result.stdout or "{}")
 
@@ -59,6 +148,8 @@ def read_youtube_metadata(url: str) -> dict[str, str | None]:
             "title": None,
             "thumbnail_url": None,
         }
+
+
 @router.post("/audio")
 async def upload_audio_file(
     job_id: str = Form(...),
@@ -74,16 +165,26 @@ async def upload_audio_file(
         )
 
     safe_job_id = safe_name(job_id)
+
+    if not safe_job_id:
+        raise HTTPException(status_code=400, detail="Missing job_id.")
+
     safe_filename = safe_name(Path(original_name).stem)
     target_dir = UPLOAD_ROOT / safe_job_id
     target_dir.mkdir(parents=True, exist_ok=True)
 
     target_path = target_dir / f"{safe_filename}-{uuid4().hex[:8]}{suffix}"
 
-    content = await file.read()
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
 
     if not content:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail="Audio file is too large. Please upload a file up to 80 MB.",
+        )
 
     target_path.write_bytes(content)
 
@@ -95,18 +196,18 @@ async def upload_audio_file(
         "size_bytes": len(content),
     }
 
+
 @router.post("/youtube")
 async def upload_youtube_audio(payload: dict[str, Any]):
-    url = str(payload.get("url") or "").strip()
+    raw_url = str(payload.get("url") or "").strip()
     job_id = str(payload.get("job_id") or "").strip()
-
-    if not url:
-        raise HTTPException(status_code=400, detail="Missing YouTube URL.")
 
     if not job_id:
         raise HTTPException(status_code=400, detail="Missing job_id.")
 
     safe_job_id = safe_name(job_id)
+    url = validate_youtube_url(raw_url)
+
     youtube_metadata = read_youtube_metadata(url)
     youtube_title = youtube_metadata.get("title")
     youtube_thumbnail_url = youtube_metadata.get("thumbnail_url")
@@ -122,13 +223,13 @@ async def upload_youtube_audio(payload: dict[str, Any]):
     output_template = raw_dir / "downloaded.%(ext)s"
 
     download_command = [
-        "/usr/local/bin/yt-dlp",
+        YTDLP_BIN,
         "--js-runtimes",
         "deno",
         "-f",
-        "140/251/139/249/bestaudio/best/18",
+        YTDLP_FORMAT,
         "--extractor-args",
-        "youtube:player_client=web,android,mweb",
+        YTDLP_PLAYER_CLIENTS,
         "--no-playlist",
         "-o",
         str(output_template),
@@ -136,13 +237,7 @@ async def upload_youtube_audio(payload: dict[str, Any]):
     ]
 
     try:
-        download_result = subprocess.run(
-            download_command,
-            capture_output=True,
-            text=True,
-            timeout=300,
-            check=False,
-        )
+        download_result = run_ytdlp_command(download_command, timeout=300)
     except subprocess.TimeoutExpired:
         raise HTTPException(
             status_code=408,
@@ -152,19 +247,7 @@ async def upload_youtube_audio(payload: dict[str, Any]):
     combined_output = f"{download_result.stdout}\n{download_result.stderr}".lower()
 
     if download_result.returncode != 0:
-        protected_markers = [
-            "drm",
-            "private video",
-            "sign in",
-            "copyright",
-            "not available",
-            "unavailable",
-            "members-only",
-            "age-restricted",
-            "this video is not available",
-        ]
-
-        if any(marker in combined_output for marker in protected_markers):
+        if any(marker in combined_output for marker in PROTECTED_MARKERS):
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -203,13 +286,19 @@ async def upload_youtube_audio(payload: dict[str, Any]):
         str(wav_path),
     ]
 
-    convert_result = subprocess.run(
-        convert_command,
-        capture_output=True,
-        text=True,
-        timeout=300,
-        check=False,
-    )
+    try:
+        convert_result = subprocess.run(
+            convert_command,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(
+            status_code=408,
+            detail="Audio conversion timed out. Try a shorter video or another source.",
+        )
 
     if convert_result.returncode != 0:
         raise HTTPException(

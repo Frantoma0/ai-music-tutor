@@ -38,12 +38,54 @@ const PRACTICE_CONNECTOR_MAX_GAP_SECONDS = 0.045;
 const PRACTICE_CONNECTOR_MIN_GAP_SECONDS = 0.004;
 const PRACTICE_CONNECTOR_WIDTH = 8;
 
+const BLACK_KEY_PITCH_CLASSES = new Set([1, 3, 6, 8, 10]);
+
+function isBlackKeyPitch(pitch) {
+  const pitchNumber = Number(pitch);
+
+  if (!Number.isFinite(pitchNumber)) {
+    return false;
+  }
+
+  const pitchClass = ((pitchNumber % 12) + 12) % 12;
+
+  return BLACK_KEY_PITCH_CLASSES.has(pitchClass);
+}
+
 function notePalette(note) {
   const hand = note.hand === "left" || note.hand === "right"
     ? note.hand
     : handForPitch(note.pitch);
 
   return hand === "left" ? lessonColors.leftHand : lessonColors.rightHand;
+}
+
+function blackKeyAccentPalette(note) {
+  const hand = note.hand === "left" || note.hand === "right"
+    ? note.hand
+    : handForPitch(note.pitch);
+
+  if (hand === "left") {
+    return {
+      top: "rgba(96, 241, 255, 0.96)",
+      middle: "rgba(25, 174, 255, 0.92)",
+      bottom: "rgba(37, 99, 235, 0.88)",
+      stroke: "rgba(191, 249, 255, 0.98)",
+      glow: "rgba(82, 232, 255, 0.78)",
+      label: "#f8fdff",
+      labelShadow: "rgba(5, 20, 40, 0.86)",
+    };
+  }
+
+  return {
+    top: "rgba(255, 136, 245, 0.96)",
+    middle: "rgba(218, 74, 255, 0.92)",
+    bottom: "rgba(147, 51, 234, 0.88)",
+    stroke: "rgba(255, 214, 252, 0.98)",
+    glow: "rgba(255, 109, 230, 0.76)",
+    label: "#fff8fe",
+    labelShadow: "rgba(42, 6, 42, 0.86)",
+  };
 }
 
 const UNKNOWN_CONFIDENCE_STYLE = {
@@ -187,6 +229,42 @@ function drawRoundedRect(ctx, x, y, width, height, radius) {
   } else {
     ctx.rect(x, y, width, height);
   }
+}
+
+function drawBlackKeyNoteAccents(ctx, note, rectX, rectY, rectW, rectH) {
+  const accent = blackKeyAccentPalette(note);
+
+  ctx.save();
+
+  ctx.shadowColor = accent.glow;
+  ctx.shadowBlur = 14;
+  ctx.globalAlpha = 0.96;
+
+  const accentFill = ctx.createLinearGradient(rectX, rectY, rectX, rectY + rectH);
+  accentFill.addColorStop(0, accent.top);
+  accentFill.addColorStop(0.48, accent.middle);
+  accentFill.addColorStop(1, accent.bottom);
+
+  ctx.fillStyle = accentFill;
+  ctx.strokeStyle = accent.stroke;
+  ctx.lineWidth = 2.05;
+  ctx.setLineDash([]);
+
+  drawRoundedRect(ctx, rectX, rectY, rectW, rectH, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  // Cheap inner contrast: one soft vertical highlight, not repeated texture.
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 0.30;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.78)";
+  ctx.lineWidth = 1.1;
+  ctx.beginPath();
+  ctx.moveTo(rectX + rectW * 0.34, rectY + 5);
+  ctx.lineTo(rectX + rectW * 0.34, rectY + rectH - 5);
+  ctx.stroke();
+
+  ctx.restore();
 }
 
 function drawKeyboardGuide(ctx, width, height) {
@@ -454,13 +532,14 @@ function drawNote(
   }
 
   const palette = notePalette(note);
+  const isBlackKeyNote = isBlackKeyPitch(note.pitch);
   const level = visualConfidenceLevel(note);
   const confidence =
     level === "unknown" ? UNKNOWN_CONFIDENCE_STYLE : confidenceStyle[level];
 
-  const rectX = x - NOTE_WIDTH / 2;
-  const rectY = y;
   const rectW = NOTE_WIDTH;
+  const rectX = x - rectW / 2;
+  const rectY = y;
   const rectH = h;
 
   ctx.save();
@@ -485,6 +564,10 @@ function drawNote(
 
   ctx.setLineDash([]);
 
+  if (isBlackKeyNote) {
+    drawBlackKeyNoteAccents(ctx, note, rectX, rectY, rectW, rectH);
+  }
+
   if (noteDisplayMode === "symbol") {
     ctx.globalAlpha = 1;
     ctx.shadowBlur = 0;
@@ -494,8 +577,9 @@ function drawNote(
 
     if (label) {
       ctx.globalAlpha = 1;
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = "#0f172a";
+      ctx.shadowColor = isBlackKeyNote ? "rgba(3, 5, 18, 0.88)" : "transparent";
+      ctx.shadowBlur = isBlackKeyNote ? 4 : 0;
+      ctx.fillStyle = isBlackKeyNote ? "#f8fbff" : "#0f172a";
       ctx.font = "800 13px Inter, system-ui, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";

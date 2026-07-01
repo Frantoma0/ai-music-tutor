@@ -7357,3 +7357,68 @@ main.app-shell {
   font-weight: 700;
   line-height: 1.25;
 }
+.home-logo-slot,
+.drawer-logo-slot {
+  overflow: hidden;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.92), rgba(244,238,255,0.72)) !important;
+  border: 1px solid rgba(124, 94, 198, 0.16);
+}
+
+.home-logo-slot img,
+.drawer-logo-slot img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+.language-toggle-button {
+  min-width: 46px;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(116, 91, 198, 0.20);
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.90), rgba(244,238,255,0.78));
+  color: #44346f;
+  font-size: 0.78rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  box-shadow:
+    0 10px 24px rgba(82, 61, 140, 0.10),
+    inset 0 1px 0 rgba(255,255,255,0.92);
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease;
+}
+
+.language-toggle-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(139, 100, 220, 0.34);
+  box-shadow:
+    0 14px 30px rgba(82, 61, 140, 0.16),
+    inset 0 1px 0 rgba(255,255,255,0.94);
+}
+
+.language-toggle-button:active {
+  transform: translateY(0);
+}
+
+.top-right .language-toggle-button {
+  flex: 0 0 auto;
+}
+
+.home-header-actions .language-toggle-button {
+  order: -1;
+}
+
+@media (max-width: 720px) {
+  .home-header-actions .language-toggle-button,
+  .top-right .language-toggle-button {
+    height: 36px;
+  }
+}
