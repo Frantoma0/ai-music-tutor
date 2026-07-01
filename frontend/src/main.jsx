@@ -319,6 +319,95 @@ function CloseIcon() {
   );
 }
 
+function friendlyNewLessonError(error) {
+  const rawMessage = String(error?.message || error || "").trim();
+  const message = rawMessage || "Failed to create lesson.";
+  const lowerMessage = message.toLowerCase();
+
+  if (
+    lowerMessage.includes("failed to fetch") ||
+    lowerMessage.includes("networkerror") ||
+    lowerMessage.includes("network error")
+  ) {
+    return "The app cannot reach the backend. Check that the server is running on http://127.0.0.1:8080.";
+  }
+
+  if (
+    lowerMessage.includes("only public youtube") ||
+    lowerMessage.includes("only youtube") ||
+    lowerMessage.includes("invalid youtube") ||
+    lowerMessage.includes("missing youtube url")
+  ) {
+    return "Please paste a valid public YouTube video link from youtube.com or youtu.be.";
+  }
+
+  if (
+    lowerMessage.includes("private") ||
+    lowerMessage.includes("drm") ||
+    lowerMessage.includes("copyright") ||
+    lowerMessage.includes("age-restricted") ||
+    lowerMessage.includes("region-blocked") ||
+    lowerMessage.includes("unavailable") ||
+    lowerMessage.includes("sign in")
+  ) {
+    return "This YouTube video cannot be processed. Try another public video, or upload an MP3/WAV file instead.";
+  }
+
+  if (
+    lowerMessage.includes("too large") ||
+    lowerMessage.includes("80 mb")
+  ) {
+    return "This audio file is too large. Please upload an MP3 or WAV file up to 80 MB.";
+  }
+
+  if (
+    lowerMessage.includes("unsupported audio") ||
+    lowerMessage.includes("unsupported file") ||
+    lowerMessage.includes(".wav or .mp3") ||
+    lowerMessage.includes(".mp3 or .wav")
+  ) {
+    return "Unsupported audio file. Please upload a .mp3 or .wav file.";
+  }
+
+  if (
+    lowerMessage.includes("timed out") ||
+    lowerMessage.includes("timeout")
+  ) {
+    return "This took too long. Try a shorter audio file, or turn source separation off.";
+  }
+
+  if (
+    lowerMessage.includes("source separation") ||
+    lowerMessage.includes("demucs")
+  ) {
+    return "Source separation failed. Try creating the lesson again with “Use source separation” turned off.";
+  }
+
+  if (
+    lowerMessage.includes("basic_pitch") ||
+    lowerMessage.includes("basic pitch") ||
+    lowerMessage.includes("transcription")
+  ) {
+    return "The AI could not transcribe this audio clearly. Try a cleaner piano recording or a shorter clip.";
+  }
+
+  if (
+    lowerMessage.includes("ffmpeg") ||
+    lowerMessage.includes("conversion")
+  ) {
+    return "The audio could not be converted. Try another YouTube video or upload an MP3/WAV file.";
+  }
+
+  if (
+    lowerMessage.includes("no such option") ||
+    lowerMessage.includes("yt-dlp")
+  ) {
+    return "The YouTube downloader is not configured correctly. Restart the backend and check yt-dlp inside Docker.";
+  }
+
+  return message;
+}
+
 function formatPlaybackTime(seconds = 0) {
   const safeSeconds = Math.max(0, Number(seconds) || 0);
   const minutes = Math.floor(safeSeconds / 60);
@@ -989,7 +1078,7 @@ async function handleCreateNewLesson() {
     setNewLessonStatus("error");
     setNewLessonStep("");
     setNewLessonHint("");
-    setNewLessonError(error.message || "Failed to create lesson.");
+    setNewLessonError(friendlyNewLessonError(error));
   }
 }
 
@@ -1401,16 +1490,6 @@ return (
 
               <button
                 type="button"
-                className={newLessonSourceType === "local" ? "active" : ""}
-                onClick={() => {
-                  resetNewLessonForm("local");
-                }}
-              >
-                Local path
-              </button>
-
-              <button
-                type="button"
                 className={newLessonSourceType === "upload" ? "active" : ""}
                 onClick={() => {
                   resetNewLessonForm("upload");
@@ -1439,7 +1518,7 @@ return (
             </label>
           ) : (
             <label className="new-lesson-field">
-              <span>{newLessonSourceType === "youtube" ? "YouTube URL" : "Server audio path"}</span>
+              <span>{newLessonSourceType === "youtube" ? "YouTube URL" : "Audio source"}</span>
              <input
                 value={newLessonSource ?? ""}
                 onChange={(event) => {
