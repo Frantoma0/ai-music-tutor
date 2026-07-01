@@ -44,6 +44,10 @@ def test_run_audio_to_analysis_tool_via_api(monkeypatch):
         use_basic_pitch=True,
         selected_stem="other",
         skip_separation=False,
+        preprocess_audio=True,
+        trim_silence=True,
+        normalize_audio=True,
+        highpass_filter=True,
         **kwargs,
     ):
         return AudioToAnalysisPipelineResult(
@@ -60,6 +64,12 @@ def test_run_audio_to_analysis_tool_via_api(monkeypatch):
                 "status": "completed",
                 "decision": "use_selected_stem",
                 "likely_solo_piano": False,
+            },
+            preprocessing={
+                "status": "skipped",
+                "enabled": False,
+                "filters": [],
+                "error": None,
             },
             transcription={
                 "status": "completed",
@@ -130,6 +140,12 @@ def test_run_audio_to_analysis_tool_can_persist_result(tmp_path, monkeypatch):
             extract={"status": "completed"},
             separation={"status": "completed"},
             separation_quality={"status": "completed"},
+            preprocessing={
+                "status": "skipped",
+                "enabled": False,
+                "filters": [],
+                "error": None,
+            },
             transcription={
                 "status": "completed",
                 "input_audio": "data/processed/pytest/input.wav",
