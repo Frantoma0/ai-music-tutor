@@ -45,7 +45,7 @@ function activeNotesAtTime(notes, musicalTime) {
   });
 }
 
-function keyClassName(pitch, activeByPitch) {
+function keyClassName(pitch, activeByPitch, livePitch, wrongPitches) {
   const activeNote = activeByPitch.get(pitch);
   const classes = ["piano-key", isBlackKey(pitch) ? "black-key" : "white-key"];
 
@@ -57,6 +57,12 @@ function keyClassName(pitch, activeByPitch) {
 
     classes.push(hand === "left" ? "active-left" : "active-right");
     classes.push(`confidence-${confidence}`);
+  }
+
+  if (wrongPitches && wrongPitches.has(pitch)) {
+    classes.push("wrong-flash");
+  } else if (livePitch !== null && livePitch !== undefined && pitch === livePitch) {
+    classes.push("live-detected");
   }
 
   return classes.join(" ");
@@ -84,7 +90,13 @@ function blackKeyStyle(pitch, whiteKeyCount) {
   };
 }
 
-export function PianoKeyboard({ notes, musicalTime = 0, labelMode = "c-only" }) {
+export function PianoKeyboard({
+  notes,
+  musicalTime = 0,
+  labelMode = "c-only",
+  livePitch = null,
+  wrongPitches = null,
+}) {
   const activeNotes = activeNotesAtTime(notes, musicalTime);
   const activeByPitch = new Map();
 
@@ -118,7 +130,7 @@ export function PianoKeyboard({ notes, musicalTime = 0, labelMode = "c-only" }) 
       <div className="white-key-row">
         {whitePitches.map((pitch) => {
           return (
-            <div key={pitch} className={keyClassName(pitch, activeByPitch)}>
+            <div key={pitch} className={keyClassName(pitch, activeByPitch, livePitch, wrongPitches)}>
               {shouldShowKeyLabel(pitch, labelMode) && (
                 <span className="white-key-label">
                   {pitchName(pitch)}
@@ -134,7 +146,7 @@ export function PianoKeyboard({ notes, musicalTime = 0, labelMode = "c-only" }) 
           return (
             <div
               key={pitch}
-              className={keyClassName(pitch, activeByPitch)}
+              className={keyClassName(pitch, activeByPitch, livePitch, wrongPitches)}
               style={blackKeyStyle(pitch, whitePitches.length)}
             >
               {shouldShowKeyLabel(pitch, labelMode) && (
