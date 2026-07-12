@@ -7422,3 +7422,1108 @@ main.app-shell {
     height: 36px;
   }
 }
+
+/* ===================== Live practice (microphone) ===================== */
+
+.mic-pill .mic-status {
+  margin-left: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #f3f6ff;
+  min-width: 46px;
+  text-align: center;
+}
+
+.mic-pill .mic-status-listening {
+  background: rgba(52, 211, 153, 0.22);
+  color: #b8f7dd;
+}
+
+.mic-pill .mic-status-denied {
+  background: rgba(248, 113, 113, 0.22);
+  color: #ffd2d2;
+}
+
+.practice-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(10, 14, 34, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.practice-stat {
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.practice-stat.hit { color: #6ef0b7; }
+.practice-stat.miss { color: #ffd47e; }
+.practice-stat.wrong { color: #ff9c9c; }
+
+.practice-stat.accuracy {
+  color: #eef2ff;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.piano-key.live-detected {
+  box-shadow:
+    inset 0 -4px 0 rgba(52, 211, 153, 0.95),
+    0 0 14px rgba(52, 211, 153, 0.55);
+}
+
+.piano-key.black-key.live-detected {
+  box-shadow:
+    inset 0 -3px 0 rgba(52, 211, 153, 0.95),
+    0 0 12px rgba(52, 211, 153, 0.6);
+}
+
+.piano-key.wrong-flash {
+  animation: wrongKeyFlash 0.45s ease-out;
+  box-shadow:
+    inset 0 -4px 0 rgba(248, 82, 82, 0.95),
+    0 0 16px rgba(248, 82, 82, 0.6);
+}
+
+@keyframes wrongKeyFlash {
+  0% { filter: brightness(1.9) saturate(1.4); }
+  100% { filter: brightness(1) saturate(1); }
+}
+
+/* ===================== SheetView (real grand staff) ===================== */
+
+.sheetview-card {
+  position: relative;
+  margin: 14px 18px 10px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fdfcff 0%, #f4f2fb 100%);
+  border: 1px solid rgba(120, 105, 180, 0.22);
+  box-shadow: 0 14px 34px rgba(20, 16, 60, 0.24);
+  overflow: hidden;
+  cursor: pointer;
+  flex: 1 1 auto;
+  min-height: 300px;
+}
+
+.sheetview-card--compact {
+  flex: 0 0 auto;
+  min-height: 208px;
+}
+
+.sheetview-svg {
+  display: block;
+}
+
+.sheetview-staff-line {
+  stroke: rgba(38, 34, 72, 0.55);
+  stroke-width: 1;
+}
+
+.sheetview-system-line {
+  stroke: rgba(38, 34, 72, 0.75);
+  stroke-width: 2.4;
+}
+
+.sheetview-ledger-line {
+  stroke: rgba(38, 34, 72, 0.7);
+  stroke-width: 1.1;
+}
+
+.sheetview-grid-line {
+  stroke: rgba(90, 82, 150, 0.14);
+  stroke-width: 1;
+}
+
+.sheetview-grid-line.strong {
+  stroke: rgba(90, 82, 150, 0.3);
+}
+
+.sheetview-grid-label {
+  font: 700 10px Inter, system-ui, sans-serif;
+  fill: rgba(70, 62, 120, 0.6);
+}
+
+.sheetview-clef-backdrop {
+  fill: rgba(250, 248, 255, 0.92);
+}
+
+.sheetview-clef {
+  font-size: 46px;
+  fill: #262248;
+}
+
+.sheetview-clef-bass {
+  font-size: 38px;
+}
+
+.sheetview-hand-tag {
+  font: 800 10px Inter, system-ui, sans-serif;
+  letter-spacing: 0.08em;
+}
+
+.sheetview-hand-tag.right { fill: #c2418f; }
+.sheetview-hand-tag.left { fill: #1f7fd1; }
+
+.sheetview-accidental {
+  font: 800 13px Georgia, "Times New Roman", serif;
+  fill: #262248;
+}
+
+.sheetview-note-label {
+  font: 800 11px Inter, system-ui, sans-serif;
+  fill: #262248;
+  text-anchor: middle;
+}
+
+.sheetview-active-ring {
+  fill: none;
+  stroke: rgba(124, 92, 255, 0.85);
+  stroke-width: 2;
+}
+
+.sheetview-note.is-active .sheetview-note-head {
+  filter: drop-shadow(0 0 5px rgba(124, 92, 255, 0.65));
+}
+
+.sheetview-judgement-mark {
+  font: 900 11px Inter, system-ui, sans-serif;
+  text-anchor: middle;
+}
+
+.sheetview-judgement-mark.hit { fill: #128a5f; }
+.sheetview-judgement-mark.miss { fill: #c23a3a; }
+
+.sheetview-playhead {
+  stroke: rgba(124, 92, 255, 0.9);
+  stroke-width: 2.4;
+  filter: drop-shadow(0 0 6px rgba(124, 92, 255, 0.55));
+}
+
+.sheetview-playhead-cap {
+  fill: rgba(124, 92, 255, 0.95);
+}
+
+.view-mode-sheet .lesson-stage,
+.lesson-stage.view-mode-sheet {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ============================================================= */
+/* ==================  UI THEMES (data-theme)  ================= */
+/* ============================================================= */
+
+/*
+ * Each theme sets shared surface/text variables; component rules
+ * below read only the variables, so one block per theme is enough.
+ * The default "daitune" theme keeps the original pastel look.
+ */
+
+body[data-theme] {
+  --surface-card: rgba(255, 255, 255, 0.54);
+  --surface-soft: rgba(255, 255, 255, 0.42);
+  --surface-strong: rgba(255, 255, 255, 0.78);
+  --surface-border: rgba(179, 166, 228, 0.42);
+  --surface-input: rgba(255, 255, 255, 0.7);
+  --switch-active-bg: #ffffff;
+  --switch-active-text: #40356f;
+  --shadow-card: 0 16px 38px rgba(122, 110, 178, 0.11);
+}
+
+body[data-theme="dark"],
+body[data-theme="midnight"],
+body[data-theme="ocean"],
+body[data-theme="sunset"] {
+  --text-primary: #eef1fb;
+  --text-secondary: #b7bdda;
+  --text-muted: #8b91b4;
+  --surface-card: rgba(18, 21, 38, 0.72);
+  --surface-soft: rgba(26, 30, 52, 0.6);
+  --surface-strong: rgba(30, 34, 58, 0.9);
+  --surface-border: rgba(120, 130, 190, 0.28);
+  --surface-input: rgba(12, 14, 28, 0.65);
+  --switch-active-bg: rgba(133, 122, 255, 0.9);
+  --switch-active-text: #ffffff;
+  --shadow-card: 0 18px 44px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+body[data-theme="dark"] {
+  background:
+    radial-gradient(circle at 14% 12%, rgba(94, 100, 160, 0.16) 0%, transparent 34%),
+    radial-gradient(circle at 86% 82%, rgba(140, 96, 180, 0.12) 0%, transparent 36%),
+    linear-gradient(150deg, #07080f 0%, #0b0d18 55%, #0e1020 100%);
+}
+
+body[data-theme="midnight"] {
+  background:
+    radial-gradient(circle at 12% 16%, rgba(56, 120, 220, 0.18) 0%, transparent 34%),
+    radial-gradient(circle at 88% 80%, rgba(30, 80, 170, 0.16) 0%, transparent 36%),
+    linear-gradient(150deg, #030a1c 0%, #06122c 55%, #0a1c3e 100%);
+}
+
+body[data-theme="ocean"] {
+  --switch-active-bg: rgba(23, 190, 187, 0.9);
+  background:
+    radial-gradient(circle at 12% 16%, rgba(20, 180, 170, 0.16) 0%, transparent 34%),
+    radial-gradient(circle at 88% 82%, rgba(250, 150, 80, 0.10) 0%, transparent 36%),
+    linear-gradient(150deg, #03181e 0%, #05272f 55%, #073843 100%);
+}
+
+body[data-theme="sunset"] {
+  --switch-active-bg: rgba(240, 110, 130, 0.92);
+  background:
+    radial-gradient(circle at 12% 14%, rgba(250, 140, 90, 0.16) 0%, transparent 34%),
+    radial-gradient(circle at 88% 84%, rgba(200, 60, 130, 0.16) 0%, transparent 36%),
+    linear-gradient(150deg, #170722 0%, #2a0d33 55%, #431540 100%);
+}
+
+body[data-theme="light"] {
+  --text-primary: #232746;
+  --text-secondary: #565d84;
+  --text-muted: #7a80a3;
+  --surface-card: rgba(255, 255, 255, 0.88);
+  --surface-soft: rgba(255, 255, 255, 0.72);
+  --surface-strong: #ffffff;
+  --surface-border: rgba(120, 132, 190, 0.3);
+  --surface-input: #ffffff;
+  --switch-active-bg: #4f5fe0;
+  --switch-active-text: #ffffff;
+  --shadow-card: 0 14px 32px rgba(70, 84, 160, 0.14);
+  background:
+    radial-gradient(circle at 16% 14%, rgba(120, 150, 250, 0.14) 0%, transparent 32%),
+    linear-gradient(150deg, #f4f7ff 0%, #eef1fb 60%, #e9ecf9 100%);
+}
+
+/* --- Themed surfaces: every rule reads only the variables --- */
+
+body[data-theme]:not([data-theme="daitune"]) .top-player-bar,
+body[data-theme]:not([data-theme="daitune"]) .controls-card,
+body[data-theme]:not([data-theme="daitune"]) .sessions-drawer,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-modal,
+body[data-theme]:not([data-theme="daitune"]) .settings-panel {
+  background: var(--surface-card);
+  border-color: var(--surface-border);
+  box-shadow: var(--shadow-card);
+  color: var(--text-primary);
+}
+
+body[data-theme]:not([data-theme="daitune"]) .mini-control-pill,
+body[data-theme]:not([data-theme="daitune"]) .tempo-control,
+body[data-theme]:not([data-theme="daitune"]) .practice-stats,
+body[data-theme]:not([data-theme="daitune"]) .view-switch,
+body[data-theme]:not([data-theme="daitune"]) .lesson-player-bar,
+body[data-theme]:not([data-theme="daitune"]) .session-item,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-source-panel,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-preprocess-panel,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-processing-panel {
+  background: var(--surface-soft);
+  border-color: var(--surface-border);
+  color: var(--text-primary);
+}
+
+body[data-theme]:not([data-theme="daitune"]) .mini-mode-switch button,
+body[data-theme]:not([data-theme="daitune"]) .view-switch button {
+  color: var(--text-secondary);
+}
+
+body[data-theme]:not([data-theme="daitune"]) .mini-mode-switch button.active,
+body[data-theme]:not([data-theme="daitune"]) .view-switch button.active {
+  background: var(--switch-active-bg);
+  color: var(--switch-active-text);
+}
+
+body[data-theme]:not([data-theme="daitune"]) input[type="text"],
+body[data-theme]:not([data-theme="daitune"]) input[type="url"],
+body[data-theme]:not([data-theme="daitune"]) input[type="number"],
+body[data-theme]:not([data-theme="daitune"]) input[type="search"] {
+  background: var(--surface-input);
+  border-color: var(--surface-border);
+  color: var(--text-primary);
+}
+
+body[data-theme]:not([data-theme="daitune"]) .sheetview-card {
+  border-color: var(--surface-border);
+  box-shadow: var(--shadow-card);
+}
+
+/* ============================================================= */
+/* =========  BLOCK PALETTE → active piano keys (vars)  ======== */
+/* ============================================================= */
+
+body[data-theme] .white-key.active-left {
+  background: linear-gradient(180deg, var(--key-left-top, #d9e9ff) 0%, var(--key-left-bottom, #8db9ff) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -4px 8px rgba(15, 23, 42, 0.08),
+    0 0 16px var(--key-left-glow, rgba(96, 165, 250, 0.34)),
+    0 3px 10px rgba(0, 0, 0, 0.12);
+}
+
+body[data-theme] .white-key.active-right {
+  background: linear-gradient(180deg, var(--key-right-top, #ffd8ec) 0%, var(--key-right-bottom, #f39ac5) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -4px 8px rgba(15, 23, 42, 0.08),
+    0 0 16px var(--key-right-glow, rgba(244, 114, 182, 0.34)),
+    0 3px 10px rgba(0, 0, 0, 0.12);
+}
+
+body[data-theme] .black-key.active-left {
+  background: linear-gradient(180deg, var(--key-left-bottom, #75b0ff) 0%, var(--key-left-deep, #2563eb) 100%);
+  box-shadow:
+    0 0 16px var(--key-left-glow, rgba(96, 165, 250, 0.42)),
+    0 6px 12px rgba(0, 0, 0, 0.28);
+}
+
+body[data-theme] .black-key.active-right {
+  background: linear-gradient(180deg, var(--key-right-bottom, #f8a7cf) 0%, var(--key-right-deep, #db2777) 100%);
+  box-shadow:
+    0 0 16px var(--key-right-glow, rgba(244, 114, 182, 0.42)),
+    0 6px 12px rgba(0, 0, 0, 0.28);
+}
+
+/* ============================================================= */
+/* ==================  Settings panel  ========================= */
+/* ============================================================= */
+
+.settings-gear-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid var(--surface-border, rgba(179, 166, 228, 0.42));
+  background: var(--surface-soft, rgba(255, 255, 255, 0.42));
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 17px;
+  transition: transform 0.15s ease;
+}
+
+.settings-gear-button:hover {
+  transform: rotate(20deg) scale(1.05);
+}
+
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 8, 20, 0.34);
+  backdrop-filter: blur(2px);
+  z-index: 60;
+}
+
+.settings-panel {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  bottom: 14px;
+  width: min(340px, calc(100vw - 28px));
+  z-index: 61;
+  border-radius: 22px;
+  border: 1px solid var(--surface-border, rgba(179, 166, 228, 0.42));
+  background: var(--surface-strong, rgba(255, 255, 255, 0.92));
+  box-shadow: 0 24px 60px rgba(20, 16, 60, 0.35);
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  color: var(--text-primary);
+}
+
+.settings-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 16px;
+}
+
+.settings-close-button {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 15px;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+}
+
+.settings-close-button:hover {
+  background: rgba(127, 127, 160, 0.16);
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.settings-section-label {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.theme-swatch-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.theme-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 4px 7px;
+  border-radius: 14px;
+  border: 1.6px solid transparent;
+  background: var(--surface-soft, rgba(255, 255, 255, 0.5));
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+
+.theme-swatch:hover {
+  transform: translateY(-1px);
+}
+
+.theme-swatch.active {
+  border-color: var(--switch-active-bg, #7a6ef0);
+  color: var(--text-primary);
+}
+
+.theme-swatch-dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35), 0 3px 8px rgba(0, 0, 0, 0.22);
+}
+
+.block-swatch-dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35), 0 3px 8px rgba(0, 0, 0, 0.22);
+}
+
+.block-swatch-dot span {
+  flex: 1;
+}
+
+.theme-swatch-label {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.settings-toggle-row input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--switch-active-bg, #7a6ef0);
+}
+
+.settings-meta {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  border-top: 1px dashed var(--surface-border, rgba(179, 166, 228, 0.42));
+  padding-top: 12px;
+  gap: 6px;
+}
+
+.midi-status-connected { color: #18a06e; }
+.midi-status-waiting { color: #c99312; }
+.midi-status-unsupported,
+.midi-status-denied,
+.midi-status-off { color: var(--text-muted); }
+
+/* ============================================================= */
+/* ============  Countdown, results, new pills  ================ */
+/* ============================================================= */
+
+.countdown-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.countdown-number {
+  font-size: 118px;
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 0 0 34px rgba(140, 110, 255, 0.9), 0 6px 26px rgba(0, 0, 0, 0.55);
+  animation: countdownPop 0.9s ease-out;
+}
+
+@keyframes countdownPop {
+  0% { transform: scale(1.7); opacity: 0; }
+  25% { transform: scale(1); opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: scale(0.92); opacity: 0; }
+}
+
+.results-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 8, 22, 0.5);
+  backdrop-filter: blur(3px);
+  z-index: 32;
+}
+
+.results-card {
+  width: min(340px, 86%);
+  border-radius: 24px;
+  background: var(--surface-strong, rgba(255, 255, 255, 0.94));
+  border: 1px solid var(--surface-border, rgba(179, 166, 228, 0.42));
+  box-shadow: 0 26px 70px rgba(10, 8, 40, 0.5);
+  padding: 22px 20px;
+  text-align: center;
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.results-stars {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  font-size: 34px;
+}
+
+.results-star {
+  filter: grayscale(1) opacity(0.35);
+  transform: scale(0.9);
+}
+
+.results-star.earned {
+  filter: none;
+  transform: scale(1);
+  animation: starPop 0.5s ease-out backwards;
+}
+
+.results-star.earned:nth-child(2) { animation-delay: 0.15s; }
+.results-star.earned:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes starPop {
+  0% { transform: scale(0.2) rotate(-30deg); opacity: 0; }
+  70% { transform: scale(1.25); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.results-accuracy {
+  font-size: 44px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.results-breakdown {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+.results-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.results-actions button {
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--surface-border, rgba(179, 166, 228, 0.42));
+  background: var(--switch-active-bg, #7a6ef0);
+  color: var(--switch-active-text, #fff);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.results-actions button.secondary {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.metronome-pill input[type="number"] {
+  width: 58px;
+  margin-left: 8px;
+  padding: 4px 6px;
+  border-radius: 9px;
+  border: 1px solid var(--surface-border, rgba(179, 166, 228, 0.42));
+  background: var(--surface-input, rgba(255, 255, 255, 0.7));
+  color: var(--text-primary);
+  font-weight: 700;
+  text-align: center;
+}
+
+.loop-pill .loop-range-label {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.loop-clear-button {
+  margin-left: 6px;
+  border: none;
+  background: rgba(226, 90, 90, 0.16);
+  color: #d24545;
+  border-radius: 8px;
+  width: 22px;
+  height: 22px;
+  font-weight: 900;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.loop-clear-button:hover {
+  background: rgba(226, 90, 90, 0.28);
+}
+
+.loop-pill .loop-range {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.loop-pill .loop-range.armed {
+  color: #18a06e;
+}
+
+/* ===== GENERATED THEME OVERRIDES (from stylesheet audit) ===== */
+
+body[data-theme]:not([data-theme="daitune"]) .back-button,
+body[data-theme]:not([data-theme="daitune"]) .compact-confidence-pill,
+body[data-theme]:not([data-theme="daitune"]) .compact-select-control select,
+body[data-theme]:not([data-theme="daitune"]) .compact-select-group,
+body[data-theme]:not([data-theme="daitune"]) .compact-time-pill,
+body[data-theme]:not([data-theme="daitune"]) .confidence-badge,
+body[data-theme]:not([data-theme="daitune"]) .confidence-block-indicator,
+body[data-theme]:not([data-theme="daitune"]) .confidence-dot,
+body[data-theme]:not([data-theme="daitune"]) .confidence-icon,
+body[data-theme]:not([data-theme="daitune"]) .confidence-legend,
+body[data-theme]:not([data-theme="daitune"]) .confidence-ring,
+body[data-theme]:not([data-theme="daitune"]) .control-button,
+body[data-theme]:not([data-theme="daitune"]) .display-chip,
+body[data-theme]:not([data-theme="daitune"]) .display-chip.is-active,
+body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button,
+body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button-accent,
+body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button-accent .drawer-nav-icon,
+body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button:hover,
+body[data-theme]:not([data-theme="daitune"]) .drawer-nav-icon,
+body[data-theme]:not([data-theme="daitune"]) .hand-image-button,
+body[data-theme]:not([data-theme="daitune"]) .hand-image-button.is-active,
+body[data-theme]:not([data-theme="daitune"]) .hand-toggle-left:focus-visible,
+body[data-theme]:not([data-theme="daitune"]) .hand-toggle-left:hover,
+body[data-theme]:not([data-theme="daitune"]) .hand-toggle-right:focus-visible,
+body[data-theme]:not([data-theme="daitune"]) .hand-toggle-right:hover,
+body[data-theme]:not([data-theme="daitune"]) .hands-control-card,
+body[data-theme]:not([data-theme="daitune"]) .hands-toggle,
+body[data-theme]:not([data-theme="daitune"]) .hands-toggle-button,
+body[data-theme]:not([data-theme="daitune"]) .hands-toggle-button.is-active,
+body[data-theme]:not([data-theme="daitune"]) .hands-toggle-row,
+body[data-theme]:not([data-theme="daitune"]) .home-lesson-delete-button,
+body[data-theme]:not([data-theme="daitune"]) .home-lesson-delete-button:hover,
+body[data-theme]:not([data-theme="daitune"]) .home-logo-slot,
+body[data-theme]:not([data-theme="daitune"]) .home-upload-button,
+body[data-theme]:not([data-theme="daitune"]) .home-youtube-row,
+body[data-theme]:not([data-theme="daitune"]) .language-toggle-button,
+body[data-theme]:not([data-theme="daitune"]) .legend-confidence,
+body[data-theme]:not([data-theme="daitune"]) .legend-item,
+body[data-theme]:not([data-theme="daitune"]) .legend-pill,
+body[data-theme]:not([data-theme="daitune"]) .lesson-action-button,
+body[data-theme]:not([data-theme="daitune"]) .lesson-action-button:hover,
+body[data-theme]:not([data-theme="daitune"]) .lesson-ai-summary span,
+body[data-theme]:not([data-theme="daitune"]) .library-button,
+body[data-theme]:not([data-theme="daitune"]) .library-button:hover,
+body[data-theme]:not([data-theme="daitune"]) .menu-button,
+body[data-theme]:not([data-theme="daitune"]) .metronome-pill input[type="number"],
+body[data-theme]:not([data-theme="daitune"]) .mini-control-pill,
+body[data-theme]:not([data-theme="daitune"]) .mini-control-pill .mini-mode-switch,
+body[data-theme]:not([data-theme="daitune"]) .mini-control-pill .mini-mode-switch button.active,
+body[data-theme]:not([data-theme="daitune"]) .mini-control-pill .mini-mode-switch button:hover,
+body[data-theme]:not([data-theme="daitune"]) .mini-mode-switch,
+body[data-theme]:not([data-theme="daitune"]) .mini-mode-switch button.active,
+body[data-theme]:not([data-theme="daitune"]) .mini-mode-switch button:hover,
+body[data-theme]:not([data-theme="daitune"]) .mode-switch,
+body[data-theme]:not([data-theme="daitune"]) .mode-switch button.active,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-field input,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-source-tabs,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-source-tabs button.active,
+body[data-theme]:not([data-theme="daitune"]) .premium-controls,
+body[data-theme]:not([data-theme="daitune"]) .preprocess-expand-button,
+body[data-theme]:not([data-theme="daitune"]) .preprocess-toggle-row,
+body[data-theme]:not([data-theme="daitune"]) .primary-control,
+body[data-theme]:not([data-theme="daitune"]) .progress-fill,
+body[data-theme]:not([data-theme="daitune"]) .progress-pill,
+body[data-theme]:not([data-theme="daitune"]) .progress-pill::before,
+body[data-theme]:not([data-theme="daitune"]) .secondary,
+body[data-theme]:not([data-theme="daitune"]) .session-item-delete-button,
+body[data-theme]:not([data-theme="daitune"]) .session-item-delete-button:hover,
+body[data-theme]:not([data-theme="daitune"]) .session-item-edit-button,
+body[data-theme]:not([data-theme="daitune"]) .session-item-edit-button:hover,
+body[data-theme]:not([data-theme="daitune"]) .session-list-item,
+body[data-theme]:not([data-theme="daitune"]) .session-list-item.active,
+body[data-theme]:not([data-theme="daitune"]) .session-list-item:hover,
+body[data-theme]:not([data-theme="daitune"]) .sessions-close-button,
+body[data-theme]:not([data-theme="daitune"]) .sessions-current-card,
+body[data-theme]:not([data-theme="daitune"]) .sessions-pencil-button,
+body[data-theme]:not([data-theme="daitune"]) .sessions-popover,
+body[data-theme]:not([data-theme="daitune"]) .sessions-rename-button,
+body[data-theme]:not([data-theme="daitune"]) .sheet-caption,
+body[data-theme]:not([data-theme="daitune"]) .sheet-card,
+body[data-theme]:not([data-theme="daitune"]) .status-pill,
+body[data-theme]:not([data-theme="daitune"]) .title-edit-button,
+body[data-theme]:not([data-theme="daitune"]) .view-icon-mix::after,
+body[data-theme]:not([data-theme="daitune"]) .view-icon-sheet::after,
+body[data-theme]:not([data-theme="daitune"]) .view-switch button,
+body[data-theme]:not([data-theme="daitune"]) .view-switch button.active,
+body[data-theme]:not([data-theme="daitune"]) .view-switch-hero,
+body[data-theme]:not([data-theme="daitune"]) .view-switch-hero button.active,
+body[data-theme]:not([data-theme="daitune"]) .view-switch-hero button:hover,
+body[data-theme]:not([data-theme="daitune"]) /* 2) Low confidence секцията да стане като останалите по височина */
+.confidence-legend,
+body[data-theme]:not([data-theme="daitune"]) /* 3) самото пунктирно "block" */
+.confidence-block-indicator,
+body[data-theme]:not([data-theme="daitune"]) /* Back button: centered,
+body[data-theme]:not([data-theme="daitune"]) /* Display block: taller and aligned with Hands */
+.mode-switch,
+body[data-theme]:not([data-theme="daitune"]) /* Low confidence chip */
+.confidence-legend,
+body[data-theme]:not([data-theme="daitune"]) /* Optional purple active state,
+body[data-theme]:not([data-theme="daitune"]) /* Progress pill with star icon */
+.progress-pill,
+body[data-theme]:not([data-theme="daitune"]) /* Settings button */
+.settings-button,
+body[data-theme]:not([data-theme="daitune"]) /* Tempo block: make it feel like a real section */
+.tempo-control,
+body[data-theme]:not([data-theme="daitune"]) /* Tiny illustrative icons inside view buttons */
+.view-icon,
+body[data-theme]:not([data-theme="daitune"]) /* View switch becomes one premium segmented capsule */
+.view-switch,
+body[data-theme]:not([data-theme="daitune"]) /* View switch: one group,
+body[data-theme]:not([data-theme="daitune"]) but clearer separated buttons */
+.view-switch,
+body[data-theme]:not([data-theme="daitune"]) button,
+body[data-theme]:not([data-theme="daitune"]) same visual language */
+.back-button {
+  background: var(--surface-soft);
+  border-color: var(--surface-border);
+}
+
+body[data-theme]:not([data-theme="daitune"]) .compact-option-panel,
+body[data-theme]:not([data-theme="daitune"]) .drawer-action-button,
+body[data-theme]:not([data-theme="daitune"]) .drawer-action-button-primary,
+body[data-theme]:not([data-theme="daitune"]) .drawer-home-button,
+body[data-theme]:not([data-theme="daitune"]) .drawer-home-button:hover,
+body[data-theme]:not([data-theme="daitune"]) .drawer-logo-slot,
+body[data-theme]:not([data-theme="daitune"]) .drawer-section-title-icon,
+body[data-theme]:not([data-theme="daitune"]) .drawer-settings-list,
+body[data-theme]:not([data-theme="daitune"]) .home-app-header,
+body[data-theme]:not([data-theme="daitune"]) .home-hero-card,
+body[data-theme]:not([data-theme="daitune"]) .home-lesson-card,
+body[data-theme]:not([data-theme="daitune"]) .lesson-player-bar,
+body[data-theme]:not([data-theme="daitune"]) .lesson-stage,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-modal,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-preprocess-panel,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-source-panel,
+body[data-theme]:not([data-theme="daitune"]) .sessions-drawer,
+body[data-theme]:not([data-theme="daitune"]) .settings-panel,
+body[data-theme]:not([data-theme="daitune"]) .top-player-bar,
+body[data-theme]:not([data-theme="daitune"]) /* ============================================================= */
+/* ==================  Settings panel  ========================= */
+/* ============================================================= */
+
+.settings-gear-button {
+  background: var(--surface-card);
+  border-color: var(--surface-border);
+  box-shadow: var(--shadow-card);
+}
+
+body[data-theme]:not([data-theme="daitune"]) .back-arrow-icon,
+body[data-theme]:not([data-theme="daitune"]) .back-button,
+body[data-theme]:not([data-theme="daitune"]) .bottom-section-title,
+body[data-theme]:not([data-theme="daitune"]) .bottom-time,
+body[data-theme]:not([data-theme="daitune"]) .compact-confidence-pill,
+body[data-theme]:not([data-theme="daitune"]) .compact-select-control,
+body[data-theme]:not([data-theme="daitune"]) .compact-select-control select,
+body[data-theme]:not([data-theme="daitune"]) .compact-time-pill,
+body[data-theme]:not([data-theme="daitune"]) .confidence-legend,
+body[data-theme]:not([data-theme="daitune"]) .control-button,
+body[data-theme]:not([data-theme="daitune"]) .display-chip,
+body[data-theme]:not([data-theme="daitune"]) .display-chip.is-active,
+body[data-theme]:not([data-theme="daitune"]) .drawer-action-button,
+body[data-theme]:not([data-theme="daitune"]) .drawer-action-button-primary,
+body[data-theme]:not([data-theme="daitune"]) .drawer-home-button,
+body[data-theme]:not([data-theme="daitune"]) .drawer-home-button small,
+body[data-theme]:not([data-theme="daitune"]) .drawer-logo-slot,
+body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button,
+body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button-accent .drawer-nav-icon,
+body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button-accent:hover .drawer-nav-icon,
+body[data-theme]:not([data-theme="daitune"]) .drawer-nav-copy small,
+body[data-theme]:not([data-theme="daitune"]) .drawer-nav-copy strong,
+body[data-theme]:not([data-theme="daitune"]) .drawer-nav-icon,
+body[data-theme]:not([data-theme="daitune"]) .drawer-section-header,
+body[data-theme]:not([data-theme="daitune"]) .drawer-section-header strong,
+body[data-theme]:not([data-theme="daitune"]) .drawer-section-title-icon,
+body[data-theme]:not([data-theme="daitune"]) .drawer-settings-list span,
+body[data-theme]:not([data-theme="daitune"]) .eyebrow,
+body[data-theme]:not([data-theme="daitune"]) .hand-illustration.left,
+body[data-theme]:not([data-theme="daitune"]) .hand-toggle,
+body[data-theme]:not([data-theme="daitune"]) .hand-toggle-left,
+body[data-theme]:not([data-theme="daitune"]) .hands-control,
+body[data-theme]:not([data-theme="daitune"]) .hands-control-title,
+body[data-theme]:not([data-theme="daitune"]) .hands-label,
+body[data-theme]:not([data-theme="daitune"]) .hands-title-inline,
+body[data-theme]:not([data-theme="daitune"]) .home-brand-block h1,
+body[data-theme]:not([data-theme="daitune"]) .home-brand-block span,
+body[data-theme]:not([data-theme="daitune"]) .home-hero-copy h1,
+body[data-theme]:not([data-theme="daitune"]) .home-hero-copy p:not(.eyebrow),
+body[data-theme]:not([data-theme="daitune"]) .home-lesson-card,
+body[data-theme]:not([data-theme="daitune"]) .home-lesson-card small,
+body[data-theme]:not([data-theme="daitune"]) .home-lesson-card span,
+body[data-theme]:not([data-theme="daitune"]) .home-lesson-card strong,
+body[data-theme]:not([data-theme="daitune"]) .home-section-header h2,
+body[data-theme]:not([data-theme="daitune"]) .home-section-header span,
+body[data-theme]:not([data-theme="daitune"]) .home-upload-button,
+body[data-theme]:not([data-theme="daitune"]) .home-youtube-row input,
+body[data-theme]:not([data-theme="daitune"]) .home-youtube-row input::placeholder,
+body[data-theme]:not([data-theme="daitune"]) .language-toggle-button,
+body[data-theme]:not([data-theme="daitune"]) .legend,
+body[data-theme]:not([data-theme="daitune"]) .legend-pill,
+body[data-theme]:not([data-theme="daitune"]) .legend.hand-legend,
+body[data-theme]:not([data-theme="daitune"]) .lesson-action-button,
+body[data-theme]:not([data-theme="daitune"]) .lesson-ai-summary span,
+body[data-theme]:not([data-theme="daitune"]) .lesson-player-label,
+body[data-theme]:not([data-theme="daitune"]) .lesson-player-time-row strong,
+body[data-theme]:not([data-theme="daitune"]) .lesson-title,
+body[data-theme]:not([data-theme="daitune"]) .library-button,
+body[data-theme]:not([data-theme="daitune"]) .menu-button,
+body[data-theme]:not([data-theme="daitune"]) .mini-control-pill .mini-mode-label,
+body[data-theme]:not([data-theme="daitune"]) .mini-control-pill .mini-mode-switch button,
+body[data-theme]:not([data-theme="daitune"]) .mini-control-pill .mini-mode-switch button.active,
+body[data-theme]:not([data-theme="daitune"]) .mini-control-pill .mini-mode-switch button:hover,
+body[data-theme]:not([data-theme="daitune"]) .mini-mode-label,
+body[data-theme]:not([data-theme="daitune"]) .mini-mode-switch button,
+body[data-theme]:not([data-theme="daitune"]) .mini-mode-switch button.active,
+body[data-theme]:not([data-theme="daitune"]) .mini-mode-switch button:hover,
+body[data-theme]:not([data-theme="daitune"]) .mode-switch > span,
+body[data-theme]:not([data-theme="daitune"]) .mode-switch button,
+body[data-theme]:not([data-theme="daitune"]) .mode-switch button.active,
+body[data-theme]:not([data-theme="daitune"]) .mode-switch span,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-field,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-field input,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-field-hint,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-modal-header h2,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-processing-panel,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-processing-panel span,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-processing-panel strong,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-source-tabs button,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-source-tabs button.active,
+body[data-theme]:not([data-theme="daitune"]) .notes-view-hint,
+body[data-theme]:not([data-theme="daitune"]) .preprocess-expand-button,
+body[data-theme]:not([data-theme="daitune"]) .preprocess-master-toggle small,
+body[data-theme]:not([data-theme="daitune"]) .preprocess-master-toggle strong,
+body[data-theme]:not([data-theme="daitune"]) .preprocess-toggle-row small,
+body[data-theme]:not([data-theme="daitune"]) .preprocess-toggle-row strong,
+body[data-theme]:not([data-theme="daitune"]) .progress-pill,
+body[data-theme]:not([data-theme="daitune"]) .progress-pill::before,
+body[data-theme]:not([data-theme="daitune"]) .session-item-edit-button,
+body[data-theme]:not([data-theme="daitune"]) .session-item-edit-button:hover,
+body[data-theme]:not([data-theme="daitune"]) .session-list-item,
+body[data-theme]:not([data-theme="daitune"]) .session-list-item span,
+body[data-theme]:not([data-theme="daitune"]) .sessions-close-button,
+body[data-theme]:not([data-theme="daitune"]) .sessions-current-card span,
+body[data-theme]:not([data-theme="daitune"]) .sessions-current-card strong,
+body[data-theme]:not([data-theme="daitune"]) .sessions-current-meta,
+body[data-theme]:not([data-theme="daitune"]) .sessions-current-title-row strong,
+body[data-theme]:not([data-theme="daitune"]) .sessions-drawer-eyebrow,
+body[data-theme]:not([data-theme="daitune"]) .sessions-drawer-header h2,
+body[data-theme]:not([data-theme="daitune"]) .sessions-pencil-button,
+body[data-theme]:not([data-theme="daitune"]) .sessions-popover-header,
+body[data-theme]:not([data-theme="daitune"]) .sessions-popover-header span,
+body[data-theme]:not([data-theme="daitune"]) .sessions-rename-button,
+body[data-theme]:not([data-theme="daitune"]) .sheet-caption,
+body[data-theme]:not([data-theme="daitune"]) .sheet-note.is-active,
+body[data-theme]:not([data-theme="daitune"]) .source-separation-toggle small,
+body[data-theme]:not([data-theme="daitune"]) .source-separation-toggle strong,
+body[data-theme]:not([data-theme="daitune"]) .status-pill,
+body[data-theme]:not([data-theme="daitune"]) .tempo-control,
+body[data-theme]:not([data-theme="daitune"]) .tempo-value,
+body[data-theme]:not([data-theme="daitune"]) .time-readout,
+body[data-theme]:not([data-theme="daitune"]) .title-edit-button,
+body[data-theme]:not([data-theme="daitune"]) .view-switch button,
+body[data-theme]:not([data-theme="daitune"]) .view-switch button.active,
+body[data-theme]:not([data-theme="daitune"]) .view-switch-hero button,
+body[data-theme]:not([data-theme="daitune"]) .view-switch-hero button.active,
+body[data-theme]:not([data-theme="daitune"]) /* =========================================================
+   LESSON API LOAD STATUS
+   ========================================================= */
+
+.lesson-load-status,
+body[data-theme]:not([data-theme="daitune"]) /* =========================================================
+   SVG HAND CONTROLS — no emoji,
+body[data-theme]:not([data-theme="daitune"]) /* Low confidence chip */
+.confidence-legend,
+body[data-theme]:not([data-theme="daitune"]) /* Push legend to the right side */
+.hand-legend,
+body[data-theme]:not([data-theme="daitune"]) /* Settings button */
+.settings-button,
+body[data-theme]:not([data-theme="daitune"]) /* Tempo block: make it feel like a real section */
+.tempo-control,
+body[data-theme]:not([data-theme="daitune"]) /* Time aligned inside the same section */
+.time-readout,
+body[data-theme]:not([data-theme="daitune"]) button,
+body[data-theme]:not([data-theme="daitune"]) premium segmented control
+   ========================================================= */
+
+.hands-control {
+  color: var(--text-primary);
+}
+
+
+/* Manual finishing touches for full-theme coverage */
+
+body[data-theme]:not([data-theme="daitune"]) .app-shell {
+  color: var(--text-primary);
+}
+
+body[data-theme]:not([data-theme="daitune"]) .lesson-stage {
+  background: transparent;
+}
+
+body[data-theme]:not([data-theme="daitune"]) .eyebrow,
+body[data-theme]:not([data-theme="daitune"]) .lesson-ai-summary span,
+body[data-theme]:not([data-theme="daitune"]) .mini-mode-label,
+body[data-theme]:not([data-theme="daitune"]) .drawer-nav-copy small,
+body[data-theme]:not([data-theme="daitune"]) .home-brand-block span,
+body[data-theme]:not([data-theme="daitune"]) .home-section-header span {
+  color: var(--text-secondary);
+}
+
+body[data-theme]:not([data-theme="daitune"]) .mini-mode-switch button.active,
+body[data-theme]:not([data-theme="daitune"]) .mode-switch button.active,
+body[data-theme]:not([data-theme="daitune"]) .view-switch button.active,
+body[data-theme]:not([data-theme="daitune"]) .new-lesson-source-tabs button.active,
+body[data-theme]:not([data-theme="daitune"]) .hands-toggle-button.is-active,
+body[data-theme]:not([data-theme="daitune"]) .display-chip.is-active {
+  background: var(--switch-active-bg);
+  color: var(--switch-active-text);
+}
+
+body[data-theme]:not([data-theme="daitune"]) select,
+body[data-theme]:not([data-theme="daitune"]) textarea,
+body[data-theme]:not([data-theme="daitune"]) input {
+  background: var(--surface-input);
+  border-color: var(--surface-border);
+  color: var(--text-primary);
+}
+
+body[data-theme]:not([data-theme="daitune"]) input::placeholder,
+body[data-theme]:not([data-theme="daitune"]) textarea::placeholder {
+  color: var(--text-muted);
+}
+
+body[data-theme]:not([data-theme="daitune"]) ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+body[data-theme]:not([data-theme="daitune"]) ::-webkit-scrollbar-thumb {
+  background: var(--surface-border);
+  border-radius: 999px;
+}
+
+body[data-theme]:not([data-theme="daitune"]) ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ===== Piano range settings controls ===== */
+
+.piano-range-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.piano-preset-chip {
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1.4px solid var(--surface-border, rgba(179, 166, 228, 0.42));
+  background: var(--surface-soft, rgba(255, 255, 255, 0.5));
+  color: var(--text-secondary);
+  font-weight: 800;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.piano-preset-chip.active {
+  background: var(--switch-active-bg, #7a6ef0);
+  border-color: var(--switch-active-bg, #7a6ef0);
+  color: var(--switch-active-text, #fff);
+}
+
+.piano-range-selects {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.piano-range-selects label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.piano-range-selects select {
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--surface-border, rgba(179, 166, 228, 0.42));
+  background: var(--surface-input, rgba(255, 255, 255, 0.7));
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.piano-range-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-secondary);
+  padding-bottom: 8px;
+}

@@ -3,11 +3,12 @@ import {
   confidenceLevel,
   handForPitch,
   noteDisplayContent,
-  pitchToX,
+  getPitchCenterRatio,
   LOWEST_PITCH,
   HIGHEST_PITCH,
 } from "../lib/noteMapping";
 import { confidenceStyle, lessonColors } from "../lib/designTokens";
+import { buildBlackKeyAccent, hexToRgba } from "../lib/themes";
 
 
 const STAGE_MIN_HEIGHT = 640;
@@ -52,40 +53,39 @@ function isBlackKeyPitch(pitch) {
   return BLACK_KEY_PITCH_CLASSES.has(pitchClass);
 }
 
-function notePalette(note) {
+function notePalette(note, colors = lessonColors) {
   const hand = note.hand === "left" || note.hand === "right"
     ? note.hand
     : handForPitch(note.pitch);
 
-  return hand === "left" ? lessonColors.leftHand : lessonColors.rightHand;
+  return hand === "left" ? colors.leftHand : colors.rightHand;
 }
 
-function blackKeyAccentPalette(note) {
+const JUDGEMENT_PALETTES = {
+  hit: {
+    fill: "rgba(24, 168, 112, 0.94)",
+    stroke: "rgba(178, 245, 214, 0.98)",
+    glow: "rgba(52, 211, 153, 0.78)",
+  },
+  miss: {
+    fill: "rgba(214, 72, 72, 0.90)",
+    stroke: "rgba(254, 205, 205, 0.96)",
+    glow: "rgba(248, 113, 113, 0.66)",
+  },
+};
+
+function paletteForNote(note, judgement, colors) {
+  return JUDGEMENT_PALETTES[judgement] || notePalette(note, colors);
+}
+
+function blackKeyAccentPalette(note, colors = lessonColors) {
   const hand = note.hand === "left" || note.hand === "right"
     ? note.hand
     : handForPitch(note.pitch);
 
-  if (hand === "left") {
-    return {
-      top: "rgba(96, 241, 255, 0.96)",
-      middle: "rgba(25, 174, 255, 0.92)",
-      bottom: "rgba(37, 99, 235, 0.88)",
-      stroke: "rgba(191, 249, 255, 0.98)",
-      glow: "rgba(82, 232, 255, 0.78)",
-      label: "#f8fdff",
-      labelShadow: "rgba(5, 20, 40, 0.86)",
-    };
-  }
-
-  return {
-    top: "rgba(255, 136, 245, 0.96)",
-    middle: "rgba(218, 74, 255, 0.92)",
-    bottom: "rgba(147, 51, 234, 0.88)",
-    stroke: "rgba(255, 214, 252, 0.98)",
-    glow: "rgba(255, 109, 230, 0.76)",
-    label: "#fff8fe",
-    labelShadow: "rgba(42, 6, 42, 0.86)",
-  };
+  return buildBlackKeyAccent(
+    hand === "left" ? colors.leftHand : colors.rightHand
+  );
 }
 
 const UNKNOWN_CONFIDENCE_STYLE = {
@@ -231,8 +231,8 @@ function drawRoundedRect(ctx, x, y, width, height, radius) {
   }
 }
 
-function drawBlackKeyNoteAccents(ctx, note, rectX, rectY, rectW, rectH) {
-  const accent = blackKeyAccentPalette(note);
+function drawBlackKeyNoteAccents(ctx, note, rectX, rectY, rectW, rectH, colors) {
+  const accent = blackKeyAccentPalette(note, colors);
 
   ctx.save();
 
@@ -267,14 +267,14 @@ function drawBlackKeyNoteAccents(ctx, note, rectX, rectY, rectW, rectH) {
   ctx.restore();
 }
 
-function drawKeyboardGuide(ctx, width, height) {
+function drawKeyboardGuide(ctx, width, height, lowestPitch, highestPitch) {
   ctx.save();
 
   ctx.strokeStyle = "rgba(255, 255, 255, 0.055)";
   ctx.lineWidth = 1;
 
-  for (let pitch = LOWEST_PITCH; pitch <= HIGHEST_PITCH; pitch += 1) {
-    const x = pitchToX(pitch, width);
+  for (let pitch = lowestPitch; pitch <= highestPitch; pitch += 1) {
+    const x = getPitchCenterRatio(pitch, lowestPitch, highestPitch) * width;
 
     ctx.beginPath();
     ctx.moveTo(x, 0);
@@ -413,8 +413,8 @@ function notesCanHavePracticeConnector(previousNote, currentNote) {
   );
 }
 
-function drawPracticeConnector(ctx, previousNote, currentNote, width, hitLineY, musicalTime) {
-  const x = pitchToX(currentNote.pitch, width);
+function drawPracticeConnector(ctx, previousNote, currentNote, width, hitLineY, musicalTime, colors, lowestPitch, highestPitch) {
+  const x = getPitchCenterRatio(currentNote.pitch, lowestPitch, highestPitch) * width;
 
   const previousEnd = Number(previousNote.end ?? previousNote.start ?? 0);
   const currentStart = Number(currentNote.start ?? 0);
@@ -430,7 +430,7 @@ function drawPracticeConnector(ctx, previousNote, currentNote, width, hitLineY, 
     return;
   }
 
-  const palette = notePalette(currentNote);
+  const palette = notePalette(currentNote, colors);
   const rectX = x - PRACTICE_CONNECTOR_WIDTH / 2;
 
   ctx.save();
@@ -467,7 +467,7 @@ function drawPracticeConnector(ctx, previousNote, currentNote, width, hitLineY, 
   ctx.restore();
 }
 
-function drawPracticeConnectors(ctx, notes, width, hitLineY, musicalTime) {
+function drawPracticeConnectors(ctx, notes, width, hitLineY, musicalTime, colors, lowestPitch, highestPitch) {
   const sortedNotes = [...notes].sort((first, second) => {
     const pitchDiff = Number(first.pitch) - Number(second.pitch);
 
@@ -489,7 +489,10 @@ function drawPracticeConnectors(ctx, notes, width, hitLineY, musicalTime) {
         currentNote,
         width,
         hitLineY,
-        musicalTime
+        musicalTime,
+        colors,
+        lowestPitch,
+        highestPitch
       );
     }
   }
@@ -502,9 +505,13 @@ function drawNote(
   hitLineY,
   musicalTime,
   noteDisplayMode,
-  noteViewMode
+  noteViewMode,
+  judgement,
+  colors,
+  lowestPitch,
+  highestPitch
 ) {
-  const x = pitchToX(note.pitch, width);
+  const x = getPitchCenterRatio(note.pitch, lowestPitch, highestPitch) * width;
   const yTop = hitLineY - (note.start - musicalTime) * PIXELS_PER_SECOND + NOTE_VISUAL_Y_OFFSET;
   const yBottom = hitLineY - (note.end - musicalTime) * PIXELS_PER_SECOND + NOTE_VISUAL_Y_OFFSET;
 
@@ -531,8 +538,8 @@ function drawNote(
     return;
   }
 
-  const palette = notePalette(note);
-  const isBlackKeyNote = isBlackKeyPitch(note.pitch);
+  const palette = paletteForNote(note, judgement, colors);
+  const isBlackKeyNote = isBlackKeyPitch(note.pitch) && !judgement;
   const level = visualConfidenceLevel(note);
   const confidence =
     level === "unknown" ? UNKNOWN_CONFIDENCE_STYLE : confidenceStyle[level];
@@ -565,7 +572,7 @@ function drawNote(
   ctx.setLineDash([]);
 
   if (isBlackKeyNote) {
-    drawBlackKeyNoteAccents(ctx, note, rectX, rectY, rectW, rectH);
+    drawBlackKeyNoteAccents(ctx, note, rectX, rectY, rectW, rectH, colors);
   }
 
   if (noteDisplayMode === "symbol") {
@@ -585,6 +592,21 @@ function drawNote(
       ctx.textBaseline = "middle";
       ctx.fillText(label, x, rectY + Math.min(rectH / 2, 22));
     }
+  }
+
+  if (judgement) {
+    ctx.globalAlpha = 1;
+    ctx.shadowColor = "rgba(4, 8, 20, 0.85)";
+    ctx.shadowBlur = 4;
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 12px Inter, system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(
+      judgement === "hit" ? "✓" : "✕",
+      rectX + rectW - 7,
+      rectY + 9
+    );
   }
 
   ctx.restore();
@@ -614,6 +636,11 @@ export function WaterfallCanvas({
   tempo,
   noteDisplayMode,
   noteViewMode = "raw",
+  judgements = {},
+  colors = lessonColors,
+  stage = null,
+  lowestPitch = LOWEST_PITCH,
+  highestPitch = HIGHEST_PITCH,
 }) {
   const canvasRef = useRef(null);
   const effectiveMusicalTime = musicalTime ?? currentTime * tempo;
@@ -662,12 +689,14 @@ export function WaterfallCanvas({
 
     ctx.clearRect(0, 0, width, height);
 
+    const stageStops = stage || ["#071026", "#111A3F", "#17143D", "#241542", "#381A48"];
+
     const background = ctx.createLinearGradient(0, 0, width, 0);
-    background.addColorStop(0.00, "#071026");
-    background.addColorStop(0.24, "#111A3F");
-    background.addColorStop(0.52, "#17143D");
-    background.addColorStop(0.76, "#241542");
-    background.addColorStop(1.00, "#381A48");
+    background.addColorStop(0.00, stageStops[0]);
+    background.addColorStop(0.24, stageStops[1]);
+    background.addColorStop(0.52, stageStops[2]);
+    background.addColorStop(0.76, stageStops[3]);
+    background.addColorStop(1.00, stageStops[4]);
 
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, width, height);
@@ -680,9 +709,10 @@ export function WaterfallCanvas({
       height * 0.48,
       width * 0.42
     );
-    leftGlow.addColorStop(0, "rgba(77, 112, 215, 0.32)");
-    leftGlow.addColorStop(0.42, "rgba(77, 112, 215, 0.14)");
-    leftGlow.addColorStop(1, "rgba(77, 112, 215, 0)");
+    const leftGlowColor = colors.leftHand.fill;
+    leftGlow.addColorStop(0, hexToRgba(leftGlowColor, 0.30));
+    leftGlow.addColorStop(0.42, hexToRgba(leftGlowColor, 0.13));
+    leftGlow.addColorStop(1, hexToRgba(leftGlowColor, 0));
 
     ctx.fillStyle = leftGlow;
     ctx.fillRect(0, 0, width, height);
@@ -710,9 +740,10 @@ export function WaterfallCanvas({
       height * 0.45,
       width * 0.44
     );
-    rightGlow.addColorStop(0, "rgba(190, 78, 158, 0.26)");
-    rightGlow.addColorStop(0.45, "rgba(190, 78, 158, 0.12)");
-    rightGlow.addColorStop(1, "rgba(190, 78, 158, 0)");
+    const rightGlowColor = colors.rightHand.fill;
+    rightGlow.addColorStop(0, hexToRgba(rightGlowColor, 0.24));
+    rightGlow.addColorStop(0.45, hexToRgba(rightGlowColor, 0.11));
+    rightGlow.addColorStop(1, hexToRgba(rightGlowColor, 0));
 
     ctx.fillStyle = rightGlow;
     ctx.fillRect(0, 0, width, height);
@@ -725,7 +756,7 @@ export function WaterfallCanvas({
     ctx.fillStyle = depthOverlay;
     ctx.fillRect(0, 0, width, height);
 
-    drawKeyboardGuide(ctx, width, height);
+    drawKeyboardGuide(ctx, width, height, lowestPitch, highestPitch);
 
     if (noteViewMode === "practice") {
       drawPracticeConnectors(
@@ -733,7 +764,10 @@ export function WaterfallCanvas({
         notes,
         width,
         hitLineY,
-        effectiveMusicalTime
+        effectiveMusicalTime,
+        colors,
+        lowestPitch,
+        highestPitch
       );
     }
 
@@ -745,12 +779,16 @@ export function WaterfallCanvas({
         hitLineY,
         effectiveMusicalTime,
         noteDisplayMode,
-        noteViewMode
+        noteViewMode,
+        judgements[note.id],
+        colors,
+        lowestPitch,
+        highestPitch
       );
     }
 
     drawHitLine(ctx, width, hitLineY);
-  }, [notes, currentTime, effectiveMusicalTime, tempo, noteDisplayMode, noteViewMode]);
+  }, [notes, currentTime, effectiveMusicalTime, tempo, noteDisplayMode, noteViewMode, judgements, colors, stage, lowestPitch, highestPitch]);
 
   return <canvas ref={canvasRef} className="waterfall-canvas" />;
 }

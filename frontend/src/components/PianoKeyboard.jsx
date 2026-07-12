@@ -45,7 +45,7 @@ function activeNotesAtTime(notes, musicalTime) {
   });
 }
 
-function keyClassName(pitch, activeByPitch) {
+function keyClassName(pitch, activeByPitch, livePitch, wrongPitches) {
   const activeNote = activeByPitch.get(pitch);
   const classes = ["piano-key", isBlackKey(pitch) ? "black-key" : "white-key"];
 
@@ -57,6 +57,12 @@ function keyClassName(pitch, activeByPitch) {
 
     classes.push(hand === "left" ? "active-left" : "active-right");
     classes.push(`confidence-${confidence}`);
+  }
+
+  if (wrongPitches && wrongPitches.has(pitch)) {
+    classes.push("wrong-flash");
+  } else if (livePitch !== null && livePitch !== undefined && pitch === livePitch) {
+    classes.push("live-detected");
   }
 
   return classes.join(" ");
@@ -74,9 +80,9 @@ function shouldShowKeyLabel(pitch, labelMode) {
   return Number(pitch) % 12 === 0;
 }
 
-function blackKeyStyle(pitch, whiteKeyCount) {
+function blackKeyStyle(pitch, whiteKeyCount, lowestPitch, highestPitch) {
   const centerPercent =
-    getPitchCenterRatio(pitch, LOWEST_PITCH, HIGHEST_PITCH) * 100;
+    getPitchCenterRatio(pitch, lowestPitch, highestPitch) * 100;
 
   return {
     left: `${centerPercent}%`,
@@ -84,7 +90,15 @@ function blackKeyStyle(pitch, whiteKeyCount) {
   };
 }
 
-export function PianoKeyboard({ notes, musicalTime = 0, labelMode = "c-only" }) {
+export function PianoKeyboard({
+  notes,
+  musicalTime = 0,
+  labelMode = "c-only",
+  livePitch = null,
+  wrongPitches = null,
+  lowestPitch = LOWEST_PITCH,
+  highestPitch = HIGHEST_PITCH,
+}) {
   const activeNotes = activeNotesAtTime(notes, musicalTime);
   const activeByPitch = new Map();
 
@@ -95,7 +109,7 @@ export function PianoKeyboard({ notes, musicalTime = 0, labelMode = "c-only" }) 
   const whitePitches = [];
   const blackPitches = [];
 
-  for (let pitch = LOWEST_PITCH; pitch <= HIGHEST_PITCH; pitch += 1) {
+  for (let pitch = lowestPitch; pitch <= highestPitch; pitch += 1) {
     if (isBlackKey(pitch)) {
       blackPitches.push(pitch);
     } else {
@@ -106,7 +120,7 @@ export function PianoKeyboard({ notes, musicalTime = 0, labelMode = "c-only" }) 
   const pitchToWhiteIndex = new Map();
   let whiteIndex = 0;
 
-  for (let pitch = LOWEST_PITCH; pitch <= HIGHEST_PITCH; pitch += 1) {
+  for (let pitch = lowestPitch; pitch <= highestPitch; pitch += 1) {
     if (!isBlackKey(pitch)) {
       pitchToWhiteIndex.set(pitch, whiteIndex);
       whiteIndex += 1;
@@ -118,7 +132,7 @@ export function PianoKeyboard({ notes, musicalTime = 0, labelMode = "c-only" }) 
       <div className="white-key-row">
         {whitePitches.map((pitch) => {
           return (
-            <div key={pitch} className={keyClassName(pitch, activeByPitch)}>
+            <div key={pitch} className={keyClassName(pitch, activeByPitch, livePitch, wrongPitches)}>
               {shouldShowKeyLabel(pitch, labelMode) && (
                 <span className="white-key-label">
                   {pitchName(pitch)}
@@ -134,8 +148,8 @@ export function PianoKeyboard({ notes, musicalTime = 0, labelMode = "c-only" }) 
           return (
             <div
               key={pitch}
-              className={keyClassName(pitch, activeByPitch)}
-              style={blackKeyStyle(pitch, whitePitches.length)}
+              className={keyClassName(pitch, activeByPitch, livePitch, wrongPitches)}
+              style={blackKeyStyle(pitch, whitePitches.length, lowestPitch, highestPitch)}
             >
               {shouldShowKeyLabel(pitch, labelMode) && (
                 <span className="black-key-label">

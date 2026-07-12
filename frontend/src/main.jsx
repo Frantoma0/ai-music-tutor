@@ -9,7 +9,19 @@ import daiTuneLogo from "./assets/dai_tune_logo.png";
 import HandsControl from "./components/HandsControl.jsx";
 import { PianoKeyboard } from "./components/PianoKeyboard";
 import { WaterfallCanvas } from "./components/WaterfallCanvas";
-import SheetPreview from "./components/SheetPreview.jsx";
+import SheetView from "./components/SheetView.jsx";
+import { buildPlayableNotes, getPlayabilityStats, fitNotesToRange } from "./lib/playability";
+import { createMicPitchDetector } from "./lib/pitchDetection";
+import {
+  UI_THEMES,
+  BLOCK_PALETTES,
+  applyUiTheme,
+  applyBlockPalette,
+  getUiTheme,
+  getBlockPalette,
+  loadStoredUiThemeId,
+  loadStoredBlockPaletteId, buildSheetHand } from "./lib/themes";
+import { attachComputerKeyboardPiano, createMidiInput } from "./lib/liveInputs";
 import { demoNotes } from "./lib/demoNotes";
 import {
   DEFAULT_LESSON_JOB_ID,
@@ -113,6 +125,46 @@ const UI_COPY = {
     "controls.blank": "Blank",
     "controls.symbol": "♪",
     "controls.notes": "Notes",
+    "controls.mic": "Mic",
+    "notes.beginner": "Beginner",
+    "notes.hintRaw": "Raw view shows the original transcription.",
+    "notes.hintPractice": "Practice: cleaned, playable arrangement",
+    "notes.hintBeginner": "Beginner: melody + simple bass only",
+    "notes.hidden": "artifacts hidden",
+    "settings.piano": "My piano",
+    "settings.pianoSize": "Keyboard size",
+    "settings.pianoFrom": "From",
+    "settings.pianoTo": "To",
+    "settings.pianoKeys": "keys",
+    "settings.fitRange": "Fit songs to my piano range",
+    "settings.custom": "Custom",
+    "mic.on": "On",
+    "mic.off": "Off",
+    "mic.listening": "Listening",
+    "mic.starting": "Starting...",
+    "mic.denied": "Mic access denied",
+    "practice.hits": "Hit",
+    "practice.missed": "Missed",
+    "practice.wrong": "Wrong",
+    "practice.accuracy": "Accuracy",
+    "settings.title": "Appearance & practice",
+    "settings.theme": "Interface theme",
+    "settings.blocks": "Note block colors",
+    "settings.countdown": "3-2-1 countdown before play",
+    "settings.midi": "MIDI keyboard",
+    "settings.keysHint": "Computer keys: A–; play from C4 · W E T Y U O P are black keys · Z / X octave",
+    "controls.mode": "Mode",
+    "mode.flow": "Flow",
+    "mode.wait": "Wait",
+    "mode.waitHint": "Wait mode pauses on each note until you play it (mic, MIDI or keys).",
+    "controls.metronome": "Metronome",
+    "controls.loop": "Loop",
+    "loop.setA": "A",
+    "loop.setB": "B",
+    "loop.clear": "Clear loop",
+    "results.title": "Lesson results",
+    "results.tryAgain": "Try again",
+    "results.close": "Close",
     "controls.raw": "Raw",
     "controls.practice": "Practice",
     "controls.keys": "Keys",
@@ -207,6 +259,46 @@ const UI_COPY = {
     "controls.blank": "Празно",
     "controls.symbol": "♪",
     "controls.notes": "Ноти",
+    "controls.mic": "Микрофон",
+    "notes.beginner": "Начинаещ",
+    "notes.hintRaw": "Raw показва оригиналната транскрипция.",
+    "notes.hintPractice": "Practice: изчистен, реален за свирене аранжимент",
+    "notes.hintBeginner": "Начинаещ: само мелодия + прост бас",
+    "notes.hidden": "скрити артефакта",
+    "settings.piano": "Моето пиано",
+    "settings.pianoSize": "Размер на клавиатурата",
+    "settings.pianoFrom": "От",
+    "settings.pianoTo": "До",
+    "settings.pianoKeys": "клавиша",
+    "settings.fitRange": "Напасвай песните към моето пиано",
+    "settings.custom": "По избор",
+    "mic.on": "Вкл",
+    "mic.off": "Изкл",
+    "mic.listening": "Слуша",
+    "mic.starting": "Стартиране...",
+    "mic.denied": "Отказан достъп до микрофона",
+    "practice.hits": "Верни",
+    "practice.missed": "Пропуснати",
+    "practice.wrong": "Грешни",
+    "practice.accuracy": "Точност",
+    "settings.title": "Изглед и упражнение",
+    "settings.theme": "Тема на интерфейса",
+    "settings.blocks": "Цветове на блокчетата",
+    "settings.countdown": "Отброяване 3-2-1 преди старт",
+    "settings.midi": "MIDI клавиатура",
+    "settings.keysHint": "Клавиши: A–; свирят от C4 · W E T Y U O P са черните · Z / X сменят октавата",
+    "controls.mode": "Режим",
+    "mode.flow": "Поток",
+    "mode.wait": "Изчакване",
+    "mode.waitHint": "Режим Изчакване спира на всяка нота, докато не я изсвириш (микрофон, MIDI или клавиши).",
+    "controls.metronome": "Метроном",
+    "controls.loop": "Повторение",
+    "loop.setA": "A",
+    "loop.setB": "B",
+    "loop.clear": "Изчисти повторението",
+    "results.title": "Резултати от урока",
+    "results.tryAgain": "Опитай пак",
+    "results.close": "Затвори",
     "controls.raw": "Сурови",
     "controls.practice": "Упражнение",
     "controls.keys": "Клавиши",
@@ -598,6 +690,39 @@ function formatPlaybackTime(seconds = 0) {
 
 
 
+const PIANO_RANGE_PRESETS = [
+  { id: "88", label: "88", low: 21, high: 108 },
+  { id: "76", label: "76", low: 28, high: 103 },
+  { id: "61", label: "61", low: 36, high: 96 },
+  { id: "49", label: "49", low: 48, high: 96 },
+  { id: "44", label: "44", low: 41, high: 84 },
+  { id: "37", label: "37", low: 48, high: 84 },
+  { id: "32", label: "32", low: 53, high: 84 },
+];
+
+const PIANO_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+function midiNoteLabel(midi) {
+  const name = PIANO_NOTE_NAMES[((midi % 12) + 12) % 12];
+  const octave = Math.floor(midi / 12) - 1;
+  return `${name}${octave}`;
+}
+
+function loadStoredPianoRange() {
+  try {
+    const low = parseInt(localStorage.getItem("daitune-piano-low"), 10);
+    const high = parseInt(localStorage.getItem("daitune-piano-high"), 10);
+
+    if (Number.isFinite(low) && Number.isFinite(high) && high - low >= 12) {
+      return { low, high };
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return { low: 36, high: 84 };
+}
+
 function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -632,6 +757,95 @@ function App() {
   const [newLessonStep, setNewLessonStep] = useState("");
   const [newLessonHint, setNewLessonHint] = useState("");
   const [language, setLanguage] = useState(resolveInitialLanguage);
+
+  // Live practice (microphone) state
+  const [isMicEnabled, setIsMicEnabled] = useState(false);
+  const [micStatus, setMicStatus] = useState("idle");
+  const [detectedMidi, setDetectedMidi] = useState(null);
+  const [noteJudgements, setNoteJudgements] = useState({});
+  const [wrongFlashes, setWrongFlashes] = useState([]);
+  const [wrongCount, setWrongCount] = useState(0);
+
+  // Appearance
+  const [uiThemeId, setUiThemeId] = useState(loadStoredUiThemeId);
+  const [blockPaletteId, setBlockPaletteId] = useState(loadStoredBlockPaletteId);
+  const [pianoRange, setPianoRange] = useState(loadStoredPianoRange);
+  const [fitToRange, setFitToRange] = useState(() => {
+    try {
+      return localStorage.getItem("daitune-fit-range") !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Practice tools
+  const [playMode, setPlayMode] = useState("flow"); // "flow" | "wait"
+  const [metronomeOn, setMetronomeOn] = useState(false);
+  const [metronomeBpm, setMetronomeBpm] = useState(90);
+  const [loopRegion, setLoopRegion] = useState(null); // { a, b } musical seconds
+  const [countdown, setCountdown] = useState(null);
+  const [countdownEnabled, setCountdownEnabled] = useState(() => {
+    try {
+      return localStorage.getItem("daitune-countdown") !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const [showResults, setShowResults] = useState(null);
+  const [midiStatus, setMidiStatus] = useState("off");
+
+  useEffect(() => {
+    applyUiTheme(uiThemeId);
+  }, [uiThemeId]);
+
+  useEffect(() => {
+    applyBlockPalette(blockPaletteId);
+  }, [blockPaletteId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("daitune-piano-low", String(pianoRange.low));
+      localStorage.setItem("daitune-piano-high", String(pianoRange.high));
+    } catch {
+      /* ignore */
+    }
+  }, [pianoRange]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("daitune-fit-range", fitToRange ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [fitToRange]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("daitune-countdown", countdownEnabled ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [countdownEnabled]);
+
+  const uiTheme = React.useMemo(() => getUiTheme(uiThemeId), [uiThemeId]);
+  const blockPalette = React.useMemo(
+    () => getBlockPalette(blockPaletteId),
+    [blockPaletteId]
+  );
+
+  const canvasPalette = React.useMemo(
+    () => ({ leftHand: blockPalette.left, rightHand: blockPalette.right }),
+    [blockPalette]
+  );
+
+  const sheetPalette = React.useMemo(
+    () => ({
+      left: buildSheetHand(blockPalette.left),
+      right: buildSheetHand(blockPalette.right),
+    }),
+    [blockPalette]
+  );
 
   const t = React.useCallback(
     (key) => getCopy(language, key),
@@ -687,6 +901,11 @@ function App() {
       triggeredNotesRef.current.clear();
       lastFrameRef.current = null;
 
+      judgementsRef.current = {};
+      setNoteJudgements({});
+      setWrongFlashes([]);
+      setWrongCount(0);
+
       setCurrentTime(clampedMusicalTime / safeTempo);
     },
     [lessonDuration, tempo]
@@ -697,17 +916,42 @@ function App() {
       ? Math.min(100, Math.max(0, (musicalTime / lessonDuration) * 100))
       : 0;
 
+  const playableLessonNotes = React.useMemo(() => {
+    if (noteViewMode === "raw") {
+      return lessonNotes;
+    }
+
+    return buildPlayableNotes(lessonNotes, noteViewMode);
+  }, [lessonNotes, noteViewMode]);
+
+  const playabilityStats = React.useMemo(
+    () => getPlayabilityStats(lessonNotes, playableLessonNotes),
+    [lessonNotes, playableLessonNotes]
+  );
+
+  const rangedLessonNotes = React.useMemo(() => {
+    if (!fitToRange) {
+      return playableLessonNotes;
+    }
+
+    return fitNotesToRange(playableLessonNotes, pianoRange.low, pianoRange.high);
+  }, [playableLessonNotes, fitToRange, pianoRange]);
+
   const visibleLessonNotes = React.useMemo(() => {
-    return lessonNotes.filter((note) => {
+    return rangedLessonNotes.filter((note) => {
       if (activeHand === "both") return true;
       return note.hand === activeHand;
     });
-  }, [lessonNotes, activeHand]);
+  }, [rangedLessonNotes, activeHand]);
 
   const noteViewHint =
-    noteViewMode === "practice"
-      ? "Practice view keeps original timing and only adds visual guidance."
-      : "Raw view shows the original transcription.";
+    noteViewMode === "raw"
+      ? t("notes.hintRaw")
+      : `${noteViewMode === "beginner" ? t("notes.hintBeginner") : t("notes.hintPractice")}${
+          playabilityStats.removedCount > 0
+            ? ` · ${playabilityStats.removedCount} ${t("notes.hidden")}`
+            : ""
+        }.`;
 
   const progressPercent = Math.max(
     0,
@@ -763,6 +1007,7 @@ function App() {
   }
   const lastFrameRef = useRef(null);
   const synthRef = useRef(null);
+  const metronomeSynthRef = useRef(null);
   const triggeredNotesRef = useRef(new Set());
   useEffect(() => {
       localStorage.setItem("lessonTitleOverrides", JSON.stringify(titleOverrides));
@@ -899,7 +1144,17 @@ function App() {
 
     synthRef.current = fallbackSynth;
 
+    const metronomeSynth = new Tone.Synth({
+      oscillator: { type: "square" },
+      envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.03 },
+      volume: -10,
+    }).connect(gain);
+
+    metronomeSynthRef.current = metronomeSynth;
+
     return () => {
+      metronomeSynth.dispose();
+      metronomeSynthRef.current = null;
       pianoSampler.dispose();
       fallbackSynth.dispose();
       gain.dispose();
@@ -922,6 +1177,7 @@ function App() {
         setLessonLoadStatus("loaded");
         lastFrameRef.current = null;
         triggeredNotesRef.current.clear();
+        resetPracticeScoring();
         setIsPlaying(false);
         setCurrentTime(0);
       } catch (error) {
@@ -940,6 +1196,347 @@ function App() {
       cancelled = true;
     };
   }, [currentLessonJobId]);
+
+  /* ---------------- Live practice: scoring against the lesson ------------- */
+
+  const HIT_WINDOW_EARLY_SECONDS = 0.35;
+  const HIT_WINDOW_LATE_SECONDS = 0.25;
+  const ALLOW_OCTAVE_TOLERANCE = true;
+
+  const musicalTimeRef = useRef(0);
+  const isPlayingRef = useRef(false);
+  const visibleNotesRef = useRef(visibleLessonNotes);
+  const judgementsRef = useRef({});
+  const detectorRef = useRef(null);
+
+  useEffect(() => {
+    musicalTimeRef.current = musicalTime;
+  }, [musicalTime]);
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  useEffect(() => {
+    visibleNotesRef.current = visibleLessonNotes;
+  }, [visibleLessonNotes]);
+
+  const resetPracticeScoring = React.useCallback(() => {
+    judgementsRef.current = {};
+    setNoteJudgements({});
+    setWrongFlashes([]);
+    setWrongCount(0);
+  }, []);
+
+  const registerWrongNote = React.useCallback((midi) => {
+    setWrongCount((count) => count + 1);
+
+    const flashId = `${midi}-${Date.now()}`;
+    setWrongFlashes((flashes) => [...flashes, { id: flashId, pitch: midi }]);
+
+    setTimeout(() => {
+      setWrongFlashes((flashes) =>
+        flashes.filter((flash) => flash.id !== flashId)
+      );
+    }, 450);
+  }, []);
+
+  const handleDetectedNoteOn = React.useCallback(
+    (midi) => {
+      // Score only while the lesson is actually running.
+      if (!isPlayingRef.current) return;
+
+      const currentMusicalTime = musicalTimeRef.current;
+      const judgements = judgementsRef.current;
+
+      let exactMatch = null;
+      let octaveMatch = null;
+
+      for (const note of visibleNotesRef.current) {
+        if (judgements[note.id]) continue;
+
+        const windowStart = Number(note.start) - HIT_WINDOW_EARLY_SECONDS;
+        const windowEnd = Number(note.end) + HIT_WINDOW_LATE_SECONDS;
+
+        if (currentMusicalTime < windowStart || currentMusicalTime > windowEnd) {
+          continue;
+        }
+
+        const distance = Math.abs(Number(note.pitch) - midi);
+
+        if (distance === 0 && !exactMatch) {
+          exactMatch = note;
+          break;
+        }
+
+        if (ALLOW_OCTAVE_TOLERANCE && distance === 12 && !octaveMatch) {
+          octaveMatch = note;
+        }
+      }
+
+      const matched = exactMatch || octaveMatch;
+
+      if (matched) {
+        const next = { ...judgementsRef.current, [matched.id]: "hit" };
+        judgementsRef.current = next;
+        setNoteJudgements(next);
+      } else {
+        registerWrongNote(midi);
+      }
+    },
+    [registerWrongNote]
+  );
+
+  const handleDetectedNoteOnRef = useRef(handleDetectedNoteOn);
+
+  useEffect(() => {
+    handleDetectedNoteOnRef.current = handleDetectedNoteOn;
+  }, [handleDetectedNoteOn]);
+
+  // Microphone lifecycle.
+  useEffect(() => {
+    if (!isMicEnabled) return undefined;
+
+    let disposed = false;
+
+    resetPracticeScoring();
+
+    const detector = createMicPitchDetector({
+      onStatus: (status) => {
+        if (!disposed) setMicStatus(status);
+      },
+      onPitch: (frame) => {
+        if (!disposed) setDetectedMidi(frame.midi);
+      },
+      onSilence: () => {
+        if (!disposed) setDetectedMidi(null);
+      },
+      onNoteOn: (midi) => {
+        if (!disposed) handleDetectedNoteOnRef.current(midi);
+      },
+    });
+
+    detectorRef.current = detector;
+
+    detector.start().catch(() => {
+      if (!disposed) {
+        setMicStatus("denied");
+        setIsMicEnabled(false);
+      }
+    });
+
+    return () => {
+      disposed = true;
+      detector.stop();
+      detectorRef.current = null;
+      setDetectedMidi(null);
+      setMicStatus("idle");
+    };
+  }, [isMicEnabled, resetPracticeScoring]);
+
+  // Missed-note sweep: notes whose window passed without a hit.
+  useEffect(() => {
+    if (!isMicEnabled) return undefined;
+
+    const timer = setInterval(() => {
+      if (!isPlayingRef.current) return;
+
+      const currentMusicalTime = musicalTimeRef.current;
+      const judgements = judgementsRef.current;
+      let changed = false;
+      const next = { ...judgements };
+
+      if (playModeRef.current === "wait") return;
+
+      for (const note of visibleNotesRef.current) {
+        if (next[note.id]) continue;
+
+        if (Number(note.end) + HIT_WINDOW_LATE_SECONDS < currentMusicalTime) {
+          next[note.id] = "miss";
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        judgementsRef.current = next;
+        setNoteJudgements(next);
+      }
+    }, 180);
+
+    return () => clearInterval(timer);
+  }, [isMicEnabled]);
+
+  const practiceStats = React.useMemo(() => {
+    let hits = 0;
+    let missed = 0;
+
+    for (const status of Object.values(noteJudgements)) {
+      if (status === "hit") hits += 1;
+      if (status === "miss") missed += 1;
+    }
+
+    const attempted = hits + missed + wrongCount;
+    const accuracy = attempted > 0 ? Math.round((hits / attempted) * 100) : null;
+
+    return { hits, missed, wrong: wrongCount, accuracy };
+  }, [noteJudgements, wrongCount]);
+
+  const wrongPitchSet = React.useMemo(
+    () => new Set(wrongFlashes.map((flash) => flash.pitch)),
+    [wrongFlashes]
+  );
+
+  /* --------------- Practice tools: wait mode, loop, metronome -------------- */
+
+  const playModeRef = useRef(playMode);
+  const loopRegionRef = useRef(loopRegion);
+  const metronomeOnRef = useRef(metronomeOn);
+  const metronomeBpmRef = useRef(metronomeBpm);
+  const wrongCountRef = useRef(0);
+  const screenModeRef = useRef(screenMode);
+  const countdownTokenRef = useRef(0);
+
+  useEffect(() => {
+    playModeRef.current = playMode;
+  }, [playMode]);
+
+  useEffect(() => {
+    loopRegionRef.current = loopRegion;
+  }, [loopRegion]);
+
+  useEffect(() => {
+    metronomeOnRef.current = metronomeOn;
+  }, [metronomeOn]);
+
+  useEffect(() => {
+    metronomeBpmRef.current = metronomeBpm;
+  }, [metronomeBpm]);
+
+  useEffect(() => {
+    wrongCountRef.current = wrongCount;
+  }, [wrongCount]);
+
+  useEffect(() => {
+    screenModeRef.current = screenMode;
+  }, [screenMode]);
+
+  function playMetronomeClick(isAccent) {
+    const metronome = metronomeSynthRef.current;
+    if (!metronome) return;
+
+    try {
+      metronome.triggerAttackRelease(isAccent ? "C6" : "G5", 0.03);
+    } catch {
+      /* audio not started yet */
+    }
+  }
+
+  const buildResultsSummary = React.useCallback(() => {
+    let hits = 0;
+    let missed = 0;
+
+    for (const status of Object.values(judgementsRef.current)) {
+      if (status === "hit") hits += 1;
+      if (status === "miss") missed += 1;
+    }
+
+    const wrong = wrongCountRef.current;
+    const attempted = hits + missed + wrong;
+
+    if (attempted === 0) return null;
+
+    const accuracy = Math.round((hits / attempted) * 100);
+    const stars = accuracy >= 88 ? 3 : accuracy >= 65 ? 2 : accuracy >= 35 ? 1 : 0;
+
+    return { hits, missed, wrong, accuracy, stars };
+  }, []);
+
+  // Live sound + scoring for MIDI keyboards and computer keys.
+  const handleLiveNoteOn = React.useCallback((midi, velocity = 92) => {
+    setDetectedMidi(midi);
+
+    const synth = synthRef.current;
+
+    if (synth) {
+      try {
+        synth.triggerAttack(
+          midiToToneNote(midi),
+          undefined,
+          Math.min(0.95, Math.max(0.2, velocity / 127))
+        );
+      } catch {
+        /* sampler still loading */
+      }
+    }
+
+    handleDetectedNoteOnRef.current(midi);
+  }, []);
+
+  const handleLiveNoteOff = React.useCallback((midi) => {
+    setDetectedMidi((current) => (current === midi ? null : current));
+
+    const synth = synthRef.current;
+
+    if (synth && typeof synth.triggerRelease === "function") {
+      try {
+        synth.triggerRelease(midiToToneNote(midi));
+      } catch {
+        /* ignore */
+      }
+    }
+  }, []);
+
+  // Computer keyboard piano – active on the lesson screen.
+  useEffect(() => {
+    if (screenMode !== "lesson") return undefined;
+
+    const detach = attachComputerKeyboardPiano({
+      onNoteOn: handleLiveNoteOn,
+      onNoteOff: handleLiveNoteOff,
+    });
+
+    return detach;
+  }, [screenMode, handleLiveNoteOn, handleLiveNoteOff]);
+
+  // MIDI keyboard – connects automatically when available.
+  useEffect(() => {
+    const midi = createMidiInput({
+      onNoteOn: handleLiveNoteOn,
+      onNoteOff: handleLiveNoteOff,
+      onStatus: setMidiStatus,
+    });
+
+    midi.start();
+
+    return () => midi.stop();
+  }, [handleLiveNoteOn, handleLiveNoteOff]);
+
+  function setLoopPointA() {
+    const a = musicalTimeRef.current;
+
+    setLoopRegion((region) => {
+      if (region && region.b !== null && region.b > a) {
+        return { a, b: region.b };
+      }
+      return { a, b: null };
+    });
+  }
+
+  function setLoopPointB() {
+    const b = musicalTimeRef.current;
+
+    setLoopRegion((region) => {
+      const a = region?.a ?? 0;
+      if (b <= a + 0.4) return region;
+      return { a, b };
+    });
+  }
+
+  function clearLoop() {
+    setLoopRegion(null);
+  }
+
+  /* ------------------------------------------------------------------------ */
 
   function triggerNotesBetween(previousMusicalTime, nextMusicalTime) {
     const synth = synthRef.current;
@@ -994,16 +1591,70 @@ function App() {
 
       if (isPlaying) {
         setCurrentTime((time) => {
-          const next = time + deltaSeconds;
+          let next = time + deltaSeconds;
 
           const previousMusicalTime = time * tempo;
-          const nextMusicalTime = next * tempo;
+          let nextMusicalTime = next * tempo;
 
-          triggerNotesBetween(previousMusicalTime, nextMusicalTime);
+          // Wait mode: freeze on every unplayed note until the learner
+          // plays it (via mic, MIDI keyboard or computer keys).
+          if (playModeRef.current === "wait") {
+            let earliestPending = null;
+
+            for (const note of visibleNotesRef.current) {
+              if (judgementsRef.current[note.id]) continue;
+
+              const noteStart = Number(note.start);
+
+              if (
+                noteStart <= nextMusicalTime &&
+                (earliestPending === null || noteStart < earliestPending)
+              ) {
+                earliestPending = noteStart;
+              }
+            }
+
+            if (
+              earliestPending !== null &&
+              nextMusicalTime > earliestPending + 0.02
+            ) {
+              nextMusicalTime = earliestPending + 0.02;
+              next = nextMusicalTime / tempo;
+            }
+          } else {
+            triggerNotesBetween(previousMusicalTime, nextMusicalTime);
+          }
+
+          // Metronome clicks on beat boundaries (accent every 4th beat).
+          if (metronomeOnRef.current && nextMusicalTime > previousMusicalTime) {
+            const beatSeconds = 60 / Math.max(30, metronomeBpmRef.current);
+            const previousBeat = Math.floor(previousMusicalTime / beatSeconds);
+            const nextBeat = Math.floor(nextMusicalTime / beatSeconds);
+
+            if (nextBeat > previousBeat) {
+              playMetronomeClick(nextBeat % 4 === 0);
+            }
+          }
+
+          // A-B loop: wrap back and restart the section cleanly.
+          const loop = loopRegionRef.current;
+
+          if (loop && loop.b !== null && nextMusicalTime >= loop.b) {
+            triggeredNotesRef.current.clear();
+            judgementsRef.current = {};
+            setNoteJudgements({});
+            return loop.a / tempo;
+          }
 
           if (next >= lessonDurationSeconds / tempo) {
             setIsPlaying(false);
             triggeredNotesRef.current.clear();
+
+            const summary = buildResultsSummary();
+            if (summary) {
+              setShowResults(summary);
+            }
+
             return 0;
           }
 
@@ -1024,16 +1675,41 @@ function App() {
 
     lastFrameRef.current = null;
 
-    if (!isPlaying && currentTime === 0) {
-      triggeredNotesRef.current.clear();
+    if (isPlaying) {
+      countdownTokenRef.current += 1;
+      setCountdown(null);
+      setIsPlaying(false);
+      return;
     }
 
-    setIsPlaying((value) => !value);
+    if (currentTime === 0) {
+      triggeredNotesRef.current.clear();
+      setShowResults(null);
+    }
+
+    if (countdownEnabled && currentTime === 0) {
+      const token = countdownTokenRef.current + 1;
+      countdownTokenRef.current = token;
+
+      for (const step of [3, 2, 1]) {
+        if (countdownTokenRef.current !== token) return;
+        setCountdown(step);
+        playMetronomeClick(step === 1);
+        await new Promise((resolve) => setTimeout(resolve, 650));
+      }
+
+      if (countdownTokenRef.current !== token) return;
+      setCountdown(null);
+    }
+
+    lastFrameRef.current = null;
+    setIsPlaying(true);
   }
 
   function resetPlayback() {
     lastFrameRef.current = null;
     triggeredNotesRef.current.clear();
+    resetPracticeScoring();
     setIsPlaying(false);
     setCurrentTime(0);
   }
@@ -1266,6 +1942,7 @@ async function handleCreateNewLesson() {
 
     lastFrameRef.current = null;
     triggeredNotesRef.current.clear();
+    resetPracticeScoring();
     setIsPlaying(false);
     setCurrentTime(0);
   } catch (error) {
@@ -1358,6 +2035,24 @@ return (
           <div className="top-right">
             <LanguageToggle language={language} onToggle={toggleLanguage} />
 
+            <button
+              type="button"
+              className="settings-gear-button"
+              onClick={() => setIsSettingsOpen((open) => !open)}
+              aria-label="Settings"
+              title={t("settings.title")}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path
+                  d="M12 15.4a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8Zm7.6-3.4c0 .5 0 .9-.1 1.3l2 1.6-1.9 3.3-2.4-.9c-.7.6-1.4 1-2.3 1.3l-.4 2.5h-3.9l-.4-2.5c-.8-.3-1.6-.7-2.3-1.3l-2.4.9-1.9-3.3 2-1.6a8 8 0 0 1 0-2.6l-2-1.6 1.9-3.3 2.4.9c.7-.6 1.5-1 2.3-1.3l.4-2.5h3.9l.4 2.5c.9.3 1.6.7 2.3 1.3l2.4-.9 1.9 3.3-2 1.6c.1.4.1.8.1 1.3Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+
             <div className="lesson-player-bar">
               <button
                 type="button"
@@ -1413,6 +2108,24 @@ return (
 
         <div className="home-header-actions">
           <LanguageToggle language={language} onToggle={toggleLanguage} />
+
+            <button
+              type="button"
+              className="settings-gear-button"
+              onClick={() => setIsSettingsOpen((open) => !open)}
+              aria-label="Settings"
+              title={t("settings.title")}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path
+                  d="M12 15.4a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8Zm7.6-3.4c0 .5 0 .9-.1 1.3l2 1.6-1.9 3.3-2.4-.9c-.7.6-1.4 1-2.3 1.3l-.4 2.5h-3.9l-.4-2.5c-.8-.3-1.6-.7-2.3-1.3l-2.4.9-1.9-3.3 2-1.6a8 8 0 0 1 0-2.6l-2-1.6 1.9-3.3 2.4.9c.7-.6 1.5-1 2.3-1.3l.4-2.5h3.9l.4 2.5c.9.3 1.6.7 2.3 1.3l2.4-.9 1.9 3.3-2 1.6c.1.4.1.8.1 1.3Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
 
           <button
             type="button"
@@ -2001,8 +2714,231 @@ return (
           </section>
         </section>
       )}
+        {isSettingsOpen && (
+          <>
+            <div
+              className="settings-backdrop"
+              onClick={() => setIsSettingsOpen(false)}
+            />
+            <aside className="settings-panel" aria-label={t("settings.title")}>
+              <header className="settings-panel-header">
+                <strong>{t("settings.title")}</strong>
+                <button
+                  type="button"
+                  className="settings-close-button"
+                  onClick={() => setIsSettingsOpen(false)}
+                >
+                  ✕
+                </button>
+              </header>
+
+              <section className="settings-section">
+                <span className="settings-section-label">{t("settings.theme")}</span>
+                <div className="theme-swatch-row">
+                  {UI_THEMES.map((theme) => (
+                    <button
+                      key={theme.id}
+                      type="button"
+                      className={`theme-swatch ${uiThemeId === theme.id ? "active" : ""}`}
+                      onClick={() => setUiThemeId(theme.id)}
+                      title={theme.label}
+                    >
+                      <span
+                        className="theme-swatch-dot"
+                        style={{
+                          background: `linear-gradient(135deg, ${theme.stage[0]} 0%, ${theme.stage[2]} 50%, ${theme.stage[4]} 100%)`,
+                        }}
+                      />
+                      <span className="theme-swatch-label">{theme.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section className="settings-section">
+                <span className="settings-section-label">{t("settings.blocks")}</span>
+                <div className="theme-swatch-row">
+                  {BLOCK_PALETTES.map((palette) => (
+                    <button
+                      key={palette.id}
+                      type="button"
+                      className={`theme-swatch ${blockPaletteId === palette.id ? "active" : ""}`}
+                      onClick={() => setBlockPaletteId(palette.id)}
+                      title={palette.label}
+                    >
+                      <span className="block-swatch-dot">
+                        <span style={{ background: palette.left.fill }} />
+                        <span style={{ background: palette.right.fill }} />
+                      </span>
+                      <span className="theme-swatch-label">{palette.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section className="settings-section">
+                <span className="settings-section-label">{t("settings.piano")}</span>
+
+                <div className="piano-range-presets">
+                  {PIANO_RANGE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      className={`piano-preset-chip ${
+                        pianoRange.low === preset.low && pianoRange.high === preset.high
+                          ? "active"
+                          : ""
+                      }`}
+                      onClick={() => setPianoRange({ low: preset.low, high: preset.high })}
+                      title={`${midiNoteLabel(preset.low)} – ${midiNoteLabel(preset.high)}`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="piano-range-selects">
+                  <label>
+                    <span>{t("settings.pianoFrom")}</span>
+                    <select
+                      value={pianoRange.low}
+                      onChange={(event) => {
+                        const low = Number(event.target.value);
+                        setPianoRange((range) => ({
+                          low,
+                          high: Math.max(range.high, low + 12),
+                        }));
+                      }}
+                    >
+                      {Array.from({ length: 108 - 21 + 1 }, (_, index) => 21 + index)
+                        .filter((midi) => midi <= pianoRange.high - 12)
+                        .map((midi) => (
+                          <option key={midi} value={midi}>
+                            {midiNoteLabel(midi)}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    <span>{t("settings.pianoTo")}</span>
+                    <select
+                      value={pianoRange.high}
+                      onChange={(event) => {
+                        const high = Number(event.target.value);
+                        setPianoRange((range) => ({
+                          low: Math.min(range.low, high - 12),
+                          high,
+                        }));
+                      }}
+                    >
+                      {Array.from({ length: 108 - 21 + 1 }, (_, index) => 21 + index)
+                        .filter((midi) => midi >= pianoRange.low + 12)
+                        .map((midi) => (
+                          <option key={midi} value={midi}>
+                            {midiNoteLabel(midi)}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+
+                  <span className="piano-range-count">
+                    {pianoRange.high - pianoRange.low + 1} {t("settings.pianoKeys")}
+                  </span>
+                </div>
+
+                <label className="settings-toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={fitToRange}
+                    onChange={(event) => setFitToRange(event.target.checked)}
+                  />
+                  <span>{t("settings.fitRange")}</span>
+                </label>
+              </section>
+
+              <section className="settings-section">
+                <label className="settings-toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={countdownEnabled}
+                    onChange={(event) => setCountdownEnabled(event.target.checked)}
+                  />
+                  <span>{t("settings.countdown")}</span>
+                </label>
+              </section>
+
+              <section className="settings-section settings-meta">
+                <span>
+                  {t("settings.midi")}:{" "}
+                  <strong className={`midi-status midi-status-${midiStatus}`}>
+                    {midiStatus}
+                  </strong>
+                </span>
+                <span className="settings-keys-hint">{t("settings.keysHint")}</span>
+              </section>
+            </aside>
+          </>
+        )}
+
         {screenMode === "lesson" && (
         <section className={`lesson-stage ${stageStateClass} view-mode-${viewMode}`}>
+          {countdown !== null && (
+            <div className="countdown-overlay" aria-hidden="true">
+              <span key={countdown} className="countdown-number">
+                {countdown}
+              </span>
+            </div>
+          )}
+
+          {showResults && (
+            <div className="results-overlay">
+              <div className="results-card">
+                <h3>{t("results.title")}</h3>
+
+                <div className="results-stars" aria-hidden="true">
+                  {[0, 1, 2].map((index) => (
+                    <span
+                      key={index}
+                      className={`results-star ${index < showResults.stars ? "earned" : ""}`}
+                    >
+                      ★
+                    </span>
+                  ))}
+                </div>
+
+                <div className="results-accuracy">{showResults.accuracy}%</div>
+
+                <div className="results-breakdown">
+                  <span className="practice-stat hit">✓ {showResults.hits}</span>
+                  <span className="practice-stat miss">○ {showResults.missed}</span>
+                  <span className="practice-stat wrong">✕ {showResults.wrong}</span>
+                </div>
+
+                <div className="results-actions">
+                  <button
+                    type="button"
+                    className="primary-control"
+                    onClick={() => {
+                      setShowResults(null);
+                      resetPracticeScoring();
+                      togglePlayback();
+                    }}
+                  >
+                    {t("results.tryAgain")}
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-control"
+                    onClick={() => setShowResults(null)}
+                  >
+                    {t("results.close")}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {viewMode === "blocks" && (
             <>
               <div className="waterfall-frame">
@@ -2013,6 +2949,11 @@ return (
                   musicalTime={musicalTime}
                   tempo={tempo}
                   noteDisplayMode={noteDisplayMode}
+                  judgements={noteJudgements}
+                  colors={canvasPalette}
+                  stage={uiTheme.stage}
+                  lowestPitch={pianoRange.low}
+                  highestPitch={pianoRange.high}
                 />
               </div>
 
@@ -2022,17 +2963,38 @@ return (
                 musicalTime={musicalTime}
                 tempo={tempo}
                 labelMode={keyboardLabelMode}
+                livePitch={detectedMidi}
+                wrongPitches={wrongPitchSet}
+                lowestPitch={pianoRange.low}
+                highestPitch={pianoRange.high}
               />
             </>
           )}
 
           {viewMode === "sheet" && (
-            <SheetPreview />
+            <SheetView
+              notes={visibleLessonNotes}
+              musicalTime={musicalTime}
+              durationSeconds={lessonDurationSeconds}
+              onSeek={seekToMusicalTime}
+              judgements={noteJudgements}
+              noteDisplayMode={noteDisplayMode}
+              handColors={sheetPalette}
+            />
           )}
 
           {viewMode === "mix" && (
             <>
-              <SheetPreview compact />
+              <SheetView
+                compact
+                notes={visibleLessonNotes}
+                musicalTime={musicalTime}
+                durationSeconds={lessonDurationSeconds}
+                onSeek={seekToMusicalTime}
+                judgements={noteJudgements}
+                noteDisplayMode={noteDisplayMode}
+                handColors={sheetPalette}
+              />
 
               <div className="waterfall-frame mix-waterfall-frame">
                 <WaterfallCanvas
@@ -2042,6 +3004,11 @@ return (
                   musicalTime={musicalTime}
                   tempo={tempo}
                   noteDisplayMode={noteDisplayMode}
+                  judgements={noteJudgements}
+                  colors={canvasPalette}
+                  stage={uiTheme.stage}
+                  lowestPitch={pianoRange.low}
+                  highestPitch={pianoRange.high}
                 />
               </div>
 
@@ -2051,6 +3018,10 @@ return (
                 musicalTime={musicalTime}
                 tempo={tempo}
                 labelMode={keyboardLabelMode}
+                livePitch={detectedMidi}
+                wrongPitches={wrongPitchSet}
+                lowestPitch={pianoRange.low}
+                highestPitch={pianoRange.high}
               />
             </>
           )}
@@ -2135,7 +3106,165 @@ return (
               >
                 Practice
               </button>
+
+              <button
+                type="button"
+                className={noteViewMode === "beginner" ? "active" : ""}
+                onClick={() => setNoteViewMode("beginner")}
+              >
+                {t("notes.beginner")}
+              </button>
             </div>
+          </div>
+
+          <div className="mini-control-pill mic-pill" aria-label="Live microphone practice">
+            <span className="mini-mode-label">{t("controls.mic")}</span>
+
+            <div className="mini-mode-switch">
+              <button
+                type="button"
+                className={!isMicEnabled ? "active" : ""}
+                onClick={() => setIsMicEnabled(false)}
+              >
+                {t("mic.off")}
+              </button>
+
+              <button
+                type="button"
+                className={isMicEnabled ? "active" : ""}
+                onClick={() => setIsMicEnabled(true)}
+              >
+                {t("mic.on")}
+              </button>
+            </div>
+
+            {isMicEnabled && (
+              <span className={`mic-status mic-status-${micStatus}`}>
+                {micStatus === "listening"
+                  ? detectedMidi !== null
+                    ? midiToToneNote(detectedMidi)
+                    : t("mic.listening")
+                  : micStatus === "denied"
+                    ? t("mic.denied")
+                    : t("mic.starting")}
+              </span>
+            )}
+          </div>
+
+          {isMicEnabled && (
+            <div className="practice-stats" aria-label="Live practice score">
+              <span className="practice-stat hit">
+                ✓ {practiceStats.hits}
+              </span>
+              <span className="practice-stat miss">
+                ○ {practiceStats.missed}
+              </span>
+              <span className="practice-stat wrong">
+                ✕ {practiceStats.wrong}
+              </span>
+              {practiceStats.accuracy !== null && (
+                <span className="practice-stat accuracy">
+                  {practiceStats.accuracy}%
+                </span>
+              )}
+            </div>
+          )}
+
+          <div className="mini-control-pill mode-pill" aria-label="Play mode" title={t("mode.waitHint")}>
+            <span className="mini-mode-label">{t("controls.mode")}</span>
+
+            <div className="mini-mode-switch">
+              <button
+                type="button"
+                className={playMode === "flow" ? "active" : ""}
+                onClick={() => setPlayMode("flow")}
+              >
+                {t("mode.flow")}
+              </button>
+
+              <button
+                type="button"
+                className={playMode === "wait" ? "active" : ""}
+                onClick={() => setPlayMode("wait")}
+              >
+                {t("mode.wait")}
+              </button>
+            </div>
+          </div>
+
+          <div className="mini-control-pill metronome-pill" aria-label="Metronome">
+            <span className="mini-mode-label">{t("controls.metronome")}</span>
+
+            <div className="mini-mode-switch">
+              <button
+                type="button"
+                className={!metronomeOn ? "active" : ""}
+                onClick={() => setMetronomeOn(false)}
+              >
+                {t("mic.off")}
+              </button>
+
+              <button
+                type="button"
+                className={metronomeOn ? "active" : ""}
+                onClick={() => setMetronomeOn(true)}
+              >
+                {t("mic.on")}
+              </button>
+            </div>
+
+            {metronomeOn && (
+              <input
+                type="number"
+                className="metronome-bpm-input"
+                min={30}
+                max={220}
+                value={metronomeBpm}
+                onChange={(event) =>
+                  setMetronomeBpm(
+                    Math.max(30, Math.min(220, Number(event.target.value) || 90))
+                  )
+                }
+                aria-label="Metronome BPM"
+              />
+            )}
+          </div>
+
+          <div className="mini-control-pill loop-pill" aria-label="Practice loop">
+            <span className="mini-mode-label">{t("controls.loop")}</span>
+
+            <div className="mini-mode-switch">
+              <button type="button" onClick={setLoopPointA}>
+                {t("loop.setA")}
+              </button>
+
+              <button
+                type="button"
+                onClick={setLoopPointB}
+                disabled={!loopRegion}
+              >
+                {t("loop.setB")}
+              </button>
+
+              {loopRegion && (
+                <button
+                  type="button"
+                  className="loop-clear-button"
+                  onClick={clearLoop}
+                  title={t("loop.clear")}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {loopRegion && (
+              <span className={`loop-range ${loopRegion.b !== null ? "armed" : ""}`}>
+                {formatPlaybackTime(loopRegion.a)}
+                {" – "}
+                {loopRegion.b !== null ? formatPlaybackTime(loopRegion.b) : "…"}
+              </span>
+            )}
           </div>
 
           <div className="mini-control-pill keys-pill" aria-label="Keyboard label mode">
