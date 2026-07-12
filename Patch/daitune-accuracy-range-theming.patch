@@ -1,0 +1,1297 @@
+diff --git a/backend/app/pipeline/transcription.py b/backend/app/pipeline/transcription.py
+index 416eb61..cd62c87 100644
+--- a/backend/app/pipeline/transcription.py
++++ b/backend/app/pipeline/transcription.py
+@@ -120,6 +120,46 @@ def _extract_note_events(
+     return notes
+ 
+ 
++def _env_float(name: str, default: float) -> float:
++    import os
++
++    raw = os.environ.get(name)
++
++    if raw is None or raw.strip() == "":
++        return default
++
++    try:
++        return float(raw)
++    except ValueError:
++        return default
++
++
++def _basic_pitch_settings() -> dict:
++    """
++    Detection thresholds for Basic Pitch, tunable via environment.
++
++    The defaults are intentionally stricter than the library defaults
++    (onset 0.5 / frame 0.3 / min length ~58 ms): real-world YouTube audio
++    with reverb, sustain pedal and compression produces a large number of
++    weak false positives at the library defaults. Raising the thresholds
++    keeps the confident, audible notes and drops overtone ghosts and
++    reverb tails at the source, before any downstream filtering.
++
++        DAITUNE_BP_ONSET_THRESHOLD    default 0.60  (higher = fewer note starts)
++        DAITUNE_BP_FRAME_THRESHOLD    default 0.40  (higher = fewer weak sustains)
++        DAITUNE_BP_MIN_NOTE_LENGTH_MS default 110   (drop sub-110 ms blips)
++        DAITUNE_BP_MIN_FREQUENCY_HZ   default 30    (below piano range = rumble)
++        DAITUNE_BP_MAX_FREQUENCY_HZ   default 4200  (above piano range = hiss)
++    """
++    return {
++        "onset_threshold": _env_float("DAITUNE_BP_ONSET_THRESHOLD", 0.60),
++        "frame_threshold": _env_float("DAITUNE_BP_FRAME_THRESHOLD", 0.40),
++        "minimum_note_length": _env_float("DAITUNE_BP_MIN_NOTE_LENGTH_MS", 110.0),
++        "minimum_frequency": _env_float("DAITUNE_BP_MIN_FREQUENCY_HZ", 30.0),
++        "maximum_frequency": _env_float("DAITUNE_BP_MAX_FREQUENCY_HZ", 4200.0),
++    }
++
++
+ def _try_basic_pitch(
+     audio_path: Path,
+     raw_output_dir: Path,
+@@ -145,10 +185,20 @@ def _try_basic_pitch(
+         raw_output_dir.mkdir(parents=True, exist_ok=True)
+         normalized_midi_path.parent.mkdir(parents=True, exist_ok=True)
+ 
+-        _model_output, midi_data, note_events = predict(
+-            audio_path,
+-            model_or_model_path=ICASSP_2022_MODEL_PATH,
+-        )
++        settings = _basic_pitch_settings()
++
++        try:
++            _model_output, midi_data, note_events = predict(
++                audio_path,
++                model_or_model_path=ICASSP_2022_MODEL_PATH,
++                **settings,
++            )
++        except TypeError:
++            # Older basic_pitch versions without these keyword arguments.
++            _model_output, midi_data, note_events = predict(
++                audio_path,
++                model_or_model_path=ICASSP_2022_MODEL_PATH,
++            )
+ 
+         midi_data.write(str(normalized_midi_path))
+ 
+diff --git a/frontend/src/components/PianoKeyboard.jsx b/frontend/src/components/PianoKeyboard.jsx
+index c0444ee..7e20c19 100644
+--- a/frontend/src/components/PianoKeyboard.jsx
++++ b/frontend/src/components/PianoKeyboard.jsx
+@@ -80,9 +80,9 @@ function shouldShowKeyLabel(pitch, labelMode) {
+   return Number(pitch) % 12 === 0;
+ }
+ 
+-function blackKeyStyle(pitch, whiteKeyCount) {
++function blackKeyStyle(pitch, whiteKeyCount, lowestPitch, highestPitch) {
+   const centerPercent =
+-    getPitchCenterRatio(pitch, LOWEST_PITCH, HIGHEST_PITCH) * 100;
++    getPitchCenterRatio(pitch, lowestPitch, highestPitch) * 100;
+ 
+   return {
+     left: `${centerPercent}%`,
+@@ -96,6 +96,8 @@ export function PianoKeyboard({
+   labelMode = "c-only",
+   livePitch = null,
+   wrongPitches = null,
++  lowestPitch = LOWEST_PITCH,
++  highestPitch = HIGHEST_PITCH,
+ }) {
+   const activeNotes = activeNotesAtTime(notes, musicalTime);
+   const activeByPitch = new Map();
+@@ -107,7 +109,7 @@ export function PianoKeyboard({
+   const whitePitches = [];
+   const blackPitches = [];
+ 
+-  for (let pitch = LOWEST_PITCH; pitch <= HIGHEST_PITCH; pitch += 1) {
++  for (let pitch = lowestPitch; pitch <= highestPitch; pitch += 1) {
+     if (isBlackKey(pitch)) {
+       blackPitches.push(pitch);
+     } else {
+@@ -118,7 +120,7 @@ export function PianoKeyboard({
+   const pitchToWhiteIndex = new Map();
+   let whiteIndex = 0;
+ 
+-  for (let pitch = LOWEST_PITCH; pitch <= HIGHEST_PITCH; pitch += 1) {
++  for (let pitch = lowestPitch; pitch <= highestPitch; pitch += 1) {
+     if (!isBlackKey(pitch)) {
+       pitchToWhiteIndex.set(pitch, whiteIndex);
+       whiteIndex += 1;
+@@ -147,7 +149,7 @@ export function PianoKeyboard({
+             <div
+               key={pitch}
+               className={keyClassName(pitch, activeByPitch, livePitch, wrongPitches)}
+-              style={blackKeyStyle(pitch, whitePitches.length)}
++              style={blackKeyStyle(pitch, whitePitches.length, lowestPitch, highestPitch)}
+             >
+               {shouldShowKeyLabel(pitch, labelMode) && (
+                 <span className="black-key-label">
+diff --git a/frontend/src/components/WaterfallCanvas.jsx b/frontend/src/components/WaterfallCanvas.jsx
+index cd0e4b6..98fb668 100644
+--- a/frontend/src/components/WaterfallCanvas.jsx
++++ b/frontend/src/components/WaterfallCanvas.jsx
+@@ -3,7 +3,7 @@ import {
+   confidenceLevel,
+   handForPitch,
+   noteDisplayContent,
+-  pitchToX,
++  getPitchCenterRatio,
+   LOWEST_PITCH,
+   HIGHEST_PITCH,
+ } from "../lib/noteMapping";
+@@ -267,14 +267,14 @@ function drawBlackKeyNoteAccents(ctx, note, rectX, rectY, rectW, rectH, colors)
+   ctx.restore();
+ }
+ 
+-function drawKeyboardGuide(ctx, width, height) {
++function drawKeyboardGuide(ctx, width, height, lowestPitch, highestPitch) {
+   ctx.save();
+ 
+   ctx.strokeStyle = "rgba(255, 255, 255, 0.055)";
+   ctx.lineWidth = 1;
+ 
+-  for (let pitch = LOWEST_PITCH; pitch <= HIGHEST_PITCH; pitch += 1) {
+-    const x = pitchToX(pitch, width);
++  for (let pitch = lowestPitch; pitch <= highestPitch; pitch += 1) {
++    const x = getPitchCenterRatio(pitch, lowestPitch, highestPitch) * width;
+ 
+     ctx.beginPath();
+     ctx.moveTo(x, 0);
+@@ -413,8 +413,8 @@ function notesCanHavePracticeConnector(previousNote, currentNote) {
+   );
+ }
+ 
+-function drawPracticeConnector(ctx, previousNote, currentNote, width, hitLineY, musicalTime, colors) {
+-  const x = pitchToX(currentNote.pitch, width);
++function drawPracticeConnector(ctx, previousNote, currentNote, width, hitLineY, musicalTime, colors, lowestPitch, highestPitch) {
++  const x = getPitchCenterRatio(currentNote.pitch, lowestPitch, highestPitch) * width;
+ 
+   const previousEnd = Number(previousNote.end ?? previousNote.start ?? 0);
+   const currentStart = Number(currentNote.start ?? 0);
+@@ -467,7 +467,7 @@ function drawPracticeConnector(ctx, previousNote, currentNote, width, hitLineY,
+   ctx.restore();
+ }
+ 
+-function drawPracticeConnectors(ctx, notes, width, hitLineY, musicalTime, colors) {
++function drawPracticeConnectors(ctx, notes, width, hitLineY, musicalTime, colors, lowestPitch, highestPitch) {
+   const sortedNotes = [...notes].sort((first, second) => {
+     const pitchDiff = Number(first.pitch) - Number(second.pitch);
+ 
+@@ -490,7 +490,9 @@ function drawPracticeConnectors(ctx, notes, width, hitLineY, musicalTime, colors
+         width,
+         hitLineY,
+         musicalTime,
+-        colors
++        colors,
++        lowestPitch,
++        highestPitch
+       );
+     }
+   }
+@@ -505,9 +507,11 @@ function drawNote(
+   noteDisplayMode,
+   noteViewMode,
+   judgement,
+-  colors
++  colors,
++  lowestPitch,
++  highestPitch
+ ) {
+-  const x = pitchToX(note.pitch, width);
++  const x = getPitchCenterRatio(note.pitch, lowestPitch, highestPitch) * width;
+   const yTop = hitLineY - (note.start - musicalTime) * PIXELS_PER_SECOND + NOTE_VISUAL_Y_OFFSET;
+   const yBottom = hitLineY - (note.end - musicalTime) * PIXELS_PER_SECOND + NOTE_VISUAL_Y_OFFSET;
+ 
+@@ -635,6 +639,8 @@ export function WaterfallCanvas({
+   judgements = {},
+   colors = lessonColors,
+   stage = null,
++  lowestPitch = LOWEST_PITCH,
++  highestPitch = HIGHEST_PITCH,
+ }) {
+   const canvasRef = useRef(null);
+   const effectiveMusicalTime = musicalTime ?? currentTime * tempo;
+@@ -750,7 +756,7 @@ export function WaterfallCanvas({
+     ctx.fillStyle = depthOverlay;
+     ctx.fillRect(0, 0, width, height);
+ 
+-    drawKeyboardGuide(ctx, width, height);
++    drawKeyboardGuide(ctx, width, height, lowestPitch, highestPitch);
+ 
+     if (noteViewMode === "practice") {
+       drawPracticeConnectors(
+@@ -759,7 +765,9 @@ export function WaterfallCanvas({
+         width,
+         hitLineY,
+         effectiveMusicalTime,
+-        colors
++        colors,
++        lowestPitch,
++        highestPitch
+       );
+     }
+ 
+@@ -773,12 +781,14 @@ export function WaterfallCanvas({
+         noteDisplayMode,
+         noteViewMode,
+         judgements[note.id],
+-        colors
++        colors,
++        lowestPitch,
++        highestPitch
+       );
+     }
+ 
+     drawHitLine(ctx, width, hitLineY);
+-  }, [notes, currentTime, effectiveMusicalTime, tempo, noteDisplayMode, noteViewMode, judgements, colors, stage]);
++  }, [notes, currentTime, effectiveMusicalTime, tempo, noteDisplayMode, noteViewMode, judgements, colors, stage, lowestPitch, highestPitch]);
+ 
+   return <canvas ref={canvasRef} className="waterfall-canvas" />;
+ }
+diff --git a/frontend/src/lib/playability.js b/frontend/src/lib/playability.js
+index 44f75bf..89723f8 100644
+--- a/frontend/src/lib/playability.js
++++ b/frontend/src/lib/playability.js
+@@ -20,29 +20,65 @@ import { buildPracticeNotes } from "./practiceNotes";
+ 
+ export const PLAYABILITY_DEFAULTS = {
+   // Pass 1 – dust
+-  dustMaxDurationSeconds: 0.075,
++  dustMaxDurationSeconds: 0.085,
+   dustMaxConfidence: 0.55,
+-  dustMaxVelocity: 16,
++  dustMaxVelocity: 18,
+ 
+-  // Pass 2 – onset clustering (chord grouping)
++  // Pass 2 – adaptive confidence floor (quantile-based)
++  confidenceQuantile: 0.15,
++  confidenceFloorMin: 0.32,
++  confidenceFloorMax: 0.5,
++
++  // Pass 3 – onset clustering (chord grouping)
+   onsetClusterWindowSeconds: 0.035,
+ 
+-  // Pass 3 – harmonic ghosts
+-  ghostIntervals: [12, 19, 24],
++  // Pass 4 – harmonic ghosts (same onset + sustained across time)
++  ghostIntervals: [12, 19, 24, 28],
+   ghostConfidenceSlack: 0.05,
+   ghostVelocitySlack: 10,
+   ghostMaxDurationRatio: 1.2,
++  sustainedGhostTailSeconds: 0.14,
+   melodyProtectConfidence: 0.78,
+ 
+-  // Pass 4 – polyphony cap
++  // Pass 5 – polyphony cap
+   maxVoicesPerHand: 3,
+   maxVoicesTotal: 6,
+ 
+-  // Pass 5 – smoothing
++  // Pass 6 – density cap (per hand, per second)
++  maxNotesPerSecondRight: 9,
++  maxNotesPerSecondLeft: 7,
++
++  // Pass 7 – smoothing
+   minPlaybackDurationSeconds: 0.09,
+   mergeGapSeconds: 0.06,
+ };
+ 
++/*
++ * Beginner preset: an arrangement a first-year learner can actually
++ * follow – melody plus simple bass, no dense ornaments, no weak notes.
++ */
++export const BEGINNER_OVERRIDES = {
++  dustMaxDurationSeconds: 0.11,
++  dustMaxConfidence: 0.62,
++  confidenceQuantile: 0.3,
++  confidenceFloorMin: 0.42,
++  confidenceFloorMax: 0.62,
++  ghostConfidenceSlack: 0.12,
++  ghostVelocitySlack: 18,
++  sustainedGhostTailSeconds: 0.22,
++  maxVoicesPerHand: 2,
++  maxVoicesTotal: 3,
++  maxNotesPerSecondRight: 5,
++  maxNotesPerSecondLeft: 3,
++  minPlaybackDurationSeconds: 0.13,
++  mergeGapSeconds: 0.1,
++};
++
++export const SIMPLIFY_LEVELS = {
++  practice: PLAYABILITY_DEFAULTS,
++  beginner: { ...PLAYABILITY_DEFAULTS, ...BEGINNER_OVERRIDES },
++};
++
+ function toNumber(value, fallback = 0) {
+   const parsed = Number(value);
+   return Number.isFinite(parsed) ? parsed : fallback;
+@@ -311,17 +347,221 @@ function enforceMinimumDurations(notes, minDuration) {
+   return adjusted.sort((a, b) => a.start - b.start || a.pitch - b.pitch);
+ }
+ 
++/* ---------------------------------------------------------------- */
++/* Pass 2 – adaptive confidence floor                                 */
++/* ---------------------------------------------------------------- */
++
++function applyConfidenceFloor(notes, options) {
++  const confidences = notes
++    .map((note) =>
++      note.confidence === null || note.confidence === undefined
++        ? null
++        : toNumber(note.confidence)
++    )
++    .filter((value) => value !== null)
++    .sort((a, b) => a - b);
++
++  // Only meaningful when most notes carry a confidence value.
++  if (confidences.length < notes.length * 0.6 || confidences.length < 8) {
++    return notes;
++  }
++
++  const index = Math.floor(confidences.length * options.confidenceQuantile);
++  const quantileValue = confidences[Math.min(index, confidences.length - 1)];
++  const floor = Math.min(
++    options.confidenceFloorMax,
++    Math.max(options.confidenceFloorMin, quantileValue)
++  );
++
++  return notes.filter((note) => {
++    if (note.confidence === null || note.confidence === undefined) {
++      return true;
++    }
++
++    if (toNumber(note.confidence) >= floor) {
++      return true;
++    }
++
++    // A long, loud note is real even when the model was unsure.
++    return note.duration > 0.4 && noteVelocity(note) >= 64;
++  });
++}
++
++/* ---------------------------------------------------------------- */
++/* Pass 4b – sustained harmonic ghosts across time                   */
++/*                                                                    */
++/* The classic Basic Pitch artifact on real recordings: while a real  */
++/* note is still sounding, its overtone (+1 or +2 octaves, or an      */
++/* octave + fifth) pops in as a separate weak note some 50–200 ms     */
++/* later. Same-onset clustering cannot catch these; a sweep over the  */
++/* currently sounding notes can.                                      */
++/* ---------------------------------------------------------------- */
++
++function removeSustainedHarmonicGhosts(notes, options) {
++  const sorted = [...notes].sort((a, b) => a.start - b.start || a.pitch - b.pitch);
++  const kept = [];
++  const removed = new Set();
++
++  for (const note of sorted) {
++    // Fundamentals currently sounding under this note's onset.
++    let isGhost = false;
++
++    for (const lower of kept) {
++      if (removed.has(lower)) continue;
++      if (lower.end <= note.start + 0.02) continue;
++      if (lower.start >= note.start - 0.015) continue; // same-onset pass handles that
++
++      const interval = note.pitch - lower.pitch;
++      if (!options.ghostIntervals.includes(interval)) continue;
++
++      const weakerConfidence =
++        noteConfidence(note) <= noteConfidence(lower) + options.ghostConfidenceSlack;
++      const weakerVelocity =
++        noteVelocity(note) <= noteVelocity(lower) + options.ghostVelocitySlack;
++      const insideTail =
++        note.end <= lower.end + options.sustainedGhostTailSeconds;
++
++      const isProtectedMelody =
++        noteConfidence(note) >= options.melodyProtectConfidence &&
++        noteVelocity(note) >= noteVelocity(lower);
++
++      if (weakerConfidence && weakerVelocity && insideTail && !isProtectedMelody) {
++        isGhost = true;
++        break;
++      }
++    }
++
++    if (!isGhost) {
++      kept.push(note);
++    }
++  }
++
++  return kept;
++}
++
++/* ---------------------------------------------------------------- */
++/* Pass 6 – density cap: keep the strongest notes per hand & second   */
++/* ---------------------------------------------------------------- */
++
++function applyDensityCap(notes, options) {
++  const buckets = new Map(); // `${hand}:${secondBucket}` -> notes[]
++
++  for (const note of notes) {
++    const key = `${noteHand(note)}:${Math.floor(note.start / 0.5)}`;
++    if (!buckets.has(key)) buckets.set(key, []);
++    buckets.get(key).push(note);
++  }
++
++  const dropped = new Set();
++
++  for (const [key, bucketNotes] of buckets) {
++    const hand = key.startsWith("left") ? "left" : "right";
++    const perSecond =
++      hand === "left"
++        ? options.maxNotesPerSecondLeft
++        : options.maxNotesPerSecondRight;
++    const limit = Math.max(1, Math.ceil(perSecond / 2)); // bucket = 0.5 s
++
++    if (bucketNotes.length <= limit) continue;
++
++    const sortedByPitch = [...bucketNotes].sort((a, b) => a.pitch - b.pitch);
++    const essential =
++      hand === "right"
++        ? sortedByPitch[sortedByPitch.length - 1]
++        : sortedByPitch[0];
++
++    const rest = bucketNotes
++      .filter((note) => note !== essential)
++      .sort((a, b) => noteStrength(b) - noteStrength(a));
++
++    for (const note of rest.slice(Math.max(limit - 1, 0))) {
++      dropped.add(note);
++    }
++  }
++
++  return notes.filter((note) => !dropped.has(note));
++}
++
++/* ---------------------------------------------------------------- */
++/* Fit to the learner's own piano                                     */
++/*                                                                    */
++/* 1. Shift the whole piece by the octave that puts the most notes    */
++/*    inside [lowestPitch, highestPitch].                             */
++/* 2. Fold the remaining outliers octave-by-octave into the range     */
++/*    (possible whenever the keyboard spans at least one octave).     */
++/* ---------------------------------------------------------------- */
++
++export function fitNotesToRange(notes = [], lowestPitch = 36, highestPitch = 84) {
++  const low = Math.min(lowestPitch, highestPitch);
++  const high = Math.max(lowestPitch, highestPitch);
++
++  if (!notes.length || high - low < 12) {
++    return notes;
++  }
++
++  let bestShift = 0;
++  let bestScore = -1;
++
++  for (let octaves = -3; octaves <= 3; octaves += 1) {
++    const shift = octaves * 12;
++    let inside = 0;
++
++    for (const note of notes) {
++      const pitch = toNumber(note.pitch) + shift;
++      if (pitch >= low && pitch <= high) inside += 1;
++    }
++
++    const score = inside - Math.abs(octaves) * 0.25; // prefer smaller shifts on ties
++
++    if (score > bestScore) {
++      bestScore = score;
++      bestShift = shift;
++    }
++  }
++
++  return notes.map((note) => {
++    const sourcePitch = toNumber(note.pitch);
++    let pitch = sourcePitch + bestShift;
++
++    while (pitch < low) pitch += 12;
++    while (pitch > high) pitch -= 12;
++
++    if (pitch === sourcePitch) {
++      return note;
++    }
++
++    const mapped = {
++      ...note,
++      pitch,
++      sourcePitch,
++      rangeFitted: true,
++    };
++
++    // Old names would show the pre-shift pitch; recompute lazily in the UI.
++    delete mapped.pitchName;
++    delete mapped.pitch_name;
++
++    return mapped;
++  });
++}
++
+ /* ---------------------------------------------------------------- */
+ /* Public API                                                        */
+ /* ---------------------------------------------------------------- */
+ 
+-export function buildPlayableNotes(notes = [], userOptions = {}) {
+-  const options = { ...PLAYABILITY_DEFAULTS, ...userOptions };
++export function buildPlayableNotes(notes = [], levelOrOptions = "practice") {
++  const base =
++    typeof levelOrOptions === "string"
++      ? SIMPLIFY_LEVELS[levelOrOptions] || PLAYABILITY_DEFAULTS
++      : { ...PLAYABILITY_DEFAULTS, ...levelOrOptions };
++  const options = base;
+ 
+   const normalized = normalizeNotes(notes);
+-  const withoutDust = normalized.filter((note) => !isDustNote(note, options));
++  let working = normalized.filter((note) => !isDustNote(note, options));
++  working = applyConfidenceFloor(working, options);
++  working = removeSustainedHarmonicGhosts(working, options);
+ 
+-  const clusters = clusterByOnset(withoutDust, options.onsetClusterWindowSeconds);
++  const clusters = clusterByOnset(working, options.onsetClusterWindowSeconds);
+   const clusteredResult = [];
+ 
+   for (const cluster of clusters) {
+@@ -345,7 +585,9 @@ export function buildPlayableNotes(notes = [], userOptions = {}) {
+     }
+   }
+ 
+-  const merged = buildPracticeNotes(clusteredResult, {
++  const densityCapped = applyDensityCap(clusteredResult, options);
++
++  const merged = buildPracticeNotes(densityCapped, {
+     maxGapSeconds: options.mergeGapSeconds,
+   });
+ 
+diff --git a/frontend/src/main.jsx b/frontend/src/main.jsx
+index 7358e35..723c5df 100644
+--- a/frontend/src/main.jsx
++++ b/frontend/src/main.jsx
+@@ -10,7 +10,7 @@ import HandsControl from "./components/HandsControl.jsx";
+ import { PianoKeyboard } from "./components/PianoKeyboard";
+ import { WaterfallCanvas } from "./components/WaterfallCanvas";
+ import SheetView from "./components/SheetView.jsx";
+-import { buildPlayableNotes, getPlayabilityStats } from "./lib/playability";
++import { buildPlayableNotes, getPlayabilityStats, fitNotesToRange } from "./lib/playability";
+ import { createMicPitchDetector } from "./lib/pitchDetection";
+ import {
+   UI_THEMES,
+@@ -126,6 +126,18 @@ const UI_COPY = {
+     "controls.symbol": "♪",
+     "controls.notes": "Notes",
+     "controls.mic": "Mic",
++    "notes.beginner": "Beginner",
++    "notes.hintRaw": "Raw view shows the original transcription.",
++    "notes.hintPractice": "Practice: cleaned, playable arrangement",
++    "notes.hintBeginner": "Beginner: melody + simple bass only",
++    "notes.hidden": "artifacts hidden",
++    "settings.piano": "My piano",
++    "settings.pianoSize": "Keyboard size",
++    "settings.pianoFrom": "From",
++    "settings.pianoTo": "To",
++    "settings.pianoKeys": "keys",
++    "settings.fitRange": "Fit songs to my piano range",
++    "settings.custom": "Custom",
+     "mic.on": "On",
+     "mic.off": "Off",
+     "mic.listening": "Listening",
+@@ -248,6 +260,18 @@ const UI_COPY = {
+     "controls.symbol": "♪",
+     "controls.notes": "Ноти",
+     "controls.mic": "Микрофон",
++    "notes.beginner": "Начинаещ",
++    "notes.hintRaw": "Raw показва оригиналната транскрипция.",
++    "notes.hintPractice": "Practice: изчистен, реален за свирене аранжимент",
++    "notes.hintBeginner": "Начинаещ: само мелодия + прост бас",
++    "notes.hidden": "скрити артефакта",
++    "settings.piano": "Моето пиано",
++    "settings.pianoSize": "Размер на клавиатурата",
++    "settings.pianoFrom": "От",
++    "settings.pianoTo": "До",
++    "settings.pianoKeys": "клавиша",
++    "settings.fitRange": "Напасвай песните към моето пиано",
++    "settings.custom": "По избор",
+     "mic.on": "Вкл",
+     "mic.off": "Изкл",
+     "mic.listening": "Слуша",
+@@ -666,6 +690,39 @@ function formatPlaybackTime(seconds = 0) {
+ 
+ 
+ 
++const PIANO_RANGE_PRESETS = [
++  { id: "88", label: "88", low: 21, high: 108 },
++  { id: "76", label: "76", low: 28, high: 103 },
++  { id: "61", label: "61", low: 36, high: 96 },
++  { id: "49", label: "49", low: 48, high: 96 },
++  { id: "44", label: "44", low: 41, high: 84 },
++  { id: "37", label: "37", low: 48, high: 84 },
++  { id: "32", label: "32", low: 53, high: 84 },
++];
++
++const PIANO_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
++
++function midiNoteLabel(midi) {
++  const name = PIANO_NOTE_NAMES[((midi % 12) + 12) % 12];
++  const octave = Math.floor(midi / 12) - 1;
++  return `${name}${octave}`;
++}
++
++function loadStoredPianoRange() {
++  try {
++    const low = parseInt(localStorage.getItem("daitune-piano-low"), 10);
++    const high = parseInt(localStorage.getItem("daitune-piano-high"), 10);
++
++    if (Number.isFinite(low) && Number.isFinite(high) && high - low >= 12) {
++      return { low, high };
++    }
++  } catch {
++    /* ignore */
++  }
++
++  return { low: 36, high: 84 };
++}
++
+ function App() {
+   const [isPlaying, setIsPlaying] = useState(false);
+   const [currentTime, setCurrentTime] = useState(0);
+@@ -712,6 +769,14 @@ function App() {
+   // Appearance
+   const [uiThemeId, setUiThemeId] = useState(loadStoredUiThemeId);
+   const [blockPaletteId, setBlockPaletteId] = useState(loadStoredBlockPaletteId);
++  const [pianoRange, setPianoRange] = useState(loadStoredPianoRange);
++  const [fitToRange, setFitToRange] = useState(() => {
++    try {
++      return localStorage.getItem("daitune-fit-range") !== "0";
++    } catch {
++      return true;
++    }
++  });
+   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+ 
+   // Practice tools
+@@ -738,6 +803,23 @@ function App() {
+     applyBlockPalette(blockPaletteId);
+   }, [blockPaletteId]);
+ 
++  useEffect(() => {
++    try {
++      localStorage.setItem("daitune-piano-low", String(pianoRange.low));
++      localStorage.setItem("daitune-piano-high", String(pianoRange.high));
++    } catch {
++      /* ignore */
++    }
++  }, [pianoRange]);
++
++  useEffect(() => {
++    try {
++      localStorage.setItem("daitune-fit-range", fitToRange ? "1" : "0");
++    } catch {
++      /* ignore */
++    }
++  }, [fitToRange]);
++
+   useEffect(() => {
+     try {
+       localStorage.setItem("daitune-countdown", countdownEnabled ? "1" : "0");
+@@ -835,11 +917,11 @@ function App() {
+       : 0;
+ 
+   const playableLessonNotes = React.useMemo(() => {
+-    if (noteViewMode !== "practice") {
++    if (noteViewMode === "raw") {
+       return lessonNotes;
+     }
+ 
+-    return buildPlayableNotes(lessonNotes);
++    return buildPlayableNotes(lessonNotes, noteViewMode);
+   }, [lessonNotes, noteViewMode]);
+ 
+   const playabilityStats = React.useMemo(
+@@ -847,19 +929,29 @@ function App() {
+     [lessonNotes, playableLessonNotes]
+   );
+ 
++  const rangedLessonNotes = React.useMemo(() => {
++    if (!fitToRange) {
++      return playableLessonNotes;
++    }
++
++    return fitNotesToRange(playableLessonNotes, pianoRange.low, pianoRange.high);
++  }, [playableLessonNotes, fitToRange, pianoRange]);
++
+   const visibleLessonNotes = React.useMemo(() => {
+-    return playableLessonNotes.filter((note) => {
++    return rangedLessonNotes.filter((note) => {
+       if (activeHand === "both") return true;
+       return note.hand === activeHand;
+     });
+-  }, [playableLessonNotes, activeHand]);
++  }, [rangedLessonNotes, activeHand]);
+ 
+   const noteViewHint =
+-    noteViewMode === "practice"
+-      ? playabilityStats.removedCount > 0
+-        ? `Practice view: playable arrangement · ${playabilityStats.removedCount} transcription artifacts hidden.`
+-        : "Practice view: playable arrangement of the transcription."
+-      : "Raw view shows the original transcription.";
++    noteViewMode === "raw"
++      ? t("notes.hintRaw")
++      : `${noteViewMode === "beginner" ? t("notes.hintBeginner") : t("notes.hintPractice")}${
++          playabilityStats.removedCount > 0
++            ? ` · ${playabilityStats.removedCount} ${t("notes.hidden")}`
++            : ""
++        }.`;
+ 
+   const progressPercent = Math.max(
+     0,
+@@ -2684,6 +2776,87 @@ return (
+                 </div>
+               </section>
+ 
++              <section className="settings-section">
++                <span className="settings-section-label">{t("settings.piano")}</span>
++
++                <div className="piano-range-presets">
++                  {PIANO_RANGE_PRESETS.map((preset) => (
++                    <button
++                      key={preset.id}
++                      type="button"
++                      className={`piano-preset-chip ${
++                        pianoRange.low === preset.low && pianoRange.high === preset.high
++                          ? "active"
++                          : ""
++                      }`}
++                      onClick={() => setPianoRange({ low: preset.low, high: preset.high })}
++                      title={`${midiNoteLabel(preset.low)} – ${midiNoteLabel(preset.high)}`}
++                    >
++                      {preset.label}
++                    </button>
++                  ))}
++                </div>
++
++                <div className="piano-range-selects">
++                  <label>
++                    <span>{t("settings.pianoFrom")}</span>
++                    <select
++                      value={pianoRange.low}
++                      onChange={(event) => {
++                        const low = Number(event.target.value);
++                        setPianoRange((range) => ({
++                          low,
++                          high: Math.max(range.high, low + 12),
++                        }));
++                      }}
++                    >
++                      {Array.from({ length: 108 - 21 + 1 }, (_, index) => 21 + index)
++                        .filter((midi) => midi <= pianoRange.high - 12)
++                        .map((midi) => (
++                          <option key={midi} value={midi}>
++                            {midiNoteLabel(midi)}
++                          </option>
++                        ))}
++                    </select>
++                  </label>
++
++                  <label>
++                    <span>{t("settings.pianoTo")}</span>
++                    <select
++                      value={pianoRange.high}
++                      onChange={(event) => {
++                        const high = Number(event.target.value);
++                        setPianoRange((range) => ({
++                          low: Math.min(range.low, high - 12),
++                          high,
++                        }));
++                      }}
++                    >
++                      {Array.from({ length: 108 - 21 + 1 }, (_, index) => 21 + index)
++                        .filter((midi) => midi >= pianoRange.low + 12)
++                        .map((midi) => (
++                          <option key={midi} value={midi}>
++                            {midiNoteLabel(midi)}
++                          </option>
++                        ))}
++                    </select>
++                  </label>
++
++                  <span className="piano-range-count">
++                    {pianoRange.high - pianoRange.low + 1} {t("settings.pianoKeys")}
++                  </span>
++                </div>
++
++                <label className="settings-toggle-row">
++                  <input
++                    type="checkbox"
++                    checked={fitToRange}
++                    onChange={(event) => setFitToRange(event.target.checked)}
++                  />
++                  <span>{t("settings.fitRange")}</span>
++                </label>
++              </section>
++
+               <section className="settings-section">
+                 <label className="settings-toggle-row">
+                   <input
+@@ -2779,6 +2952,8 @@ return (
+                   judgements={noteJudgements}
+                   colors={canvasPalette}
+                   stage={uiTheme.stage}
++                  lowestPitch={pianoRange.low}
++                  highestPitch={pianoRange.high}
+                 />
+               </div>
+ 
+@@ -2790,6 +2965,8 @@ return (
+                 labelMode={keyboardLabelMode}
+                 livePitch={detectedMidi}
+                 wrongPitches={wrongPitchSet}
++                lowestPitch={pianoRange.low}
++                highestPitch={pianoRange.high}
+               />
+             </>
+           )}
+@@ -2830,6 +3007,8 @@ return (
+                   judgements={noteJudgements}
+                   colors={canvasPalette}
+                   stage={uiTheme.stage}
++                  lowestPitch={pianoRange.low}
++                  highestPitch={pianoRange.high}
+                 />
+               </div>
+ 
+@@ -2841,6 +3020,8 @@ return (
+                 labelMode={keyboardLabelMode}
+                 livePitch={detectedMidi}
+                 wrongPitches={wrongPitchSet}
++                lowestPitch={pianoRange.low}
++                highestPitch={pianoRange.high}
+               />
+             </>
+           )}
+@@ -2925,6 +3106,14 @@ return (
+               >
+                 Practice
+               </button>
++
++              <button
++                type="button"
++                className={noteViewMode === "beginner" ? "active" : ""}
++                onClick={() => setNoteViewMode("beginner")}
++              >
++                {t("notes.beginner")}
++              </button>
+             </div>
+           </div>
+ 
+diff --git a/frontend/src/styles.css b/frontend/src/styles.css
+index dbe1f4a..d1b9e18 100644
+--- a/frontend/src/styles.css
++++ b/frontend/src/styles.css
+@@ -8122,3 +8122,408 @@ body[data-theme] .black-key.active-right {
+ .loop-pill .loop-range.armed {
+   color: #18a06e;
+ }
++
++/* ===== GENERATED THEME OVERRIDES (from stylesheet audit) ===== */
++
++body[data-theme]:not([data-theme="daitune"]) .back-button,
++body[data-theme]:not([data-theme="daitune"]) .compact-confidence-pill,
++body[data-theme]:not([data-theme="daitune"]) .compact-select-control select,
++body[data-theme]:not([data-theme="daitune"]) .compact-select-group,
++body[data-theme]:not([data-theme="daitune"]) .compact-time-pill,
++body[data-theme]:not([data-theme="daitune"]) .confidence-badge,
++body[data-theme]:not([data-theme="daitune"]) .confidence-block-indicator,
++body[data-theme]:not([data-theme="daitune"]) .confidence-dot,
++body[data-theme]:not([data-theme="daitune"]) .confidence-icon,
++body[data-theme]:not([data-theme="daitune"]) .confidence-legend,
++body[data-theme]:not([data-theme="daitune"]) .confidence-ring,
++body[data-theme]:not([data-theme="daitune"]) .control-button,
++body[data-theme]:not([data-theme="daitune"]) .display-chip,
++body[data-theme]:not([data-theme="daitune"]) .display-chip.is-active,
++body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button,
++body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button-accent,
++body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button-accent .drawer-nav-icon,
++body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button:hover,
++body[data-theme]:not([data-theme="daitune"]) .drawer-nav-icon,
++body[data-theme]:not([data-theme="daitune"]) .hand-image-button,
++body[data-theme]:not([data-theme="daitune"]) .hand-image-button.is-active,
++body[data-theme]:not([data-theme="daitune"]) .hand-toggle-left:focus-visible,
++body[data-theme]:not([data-theme="daitune"]) .hand-toggle-left:hover,
++body[data-theme]:not([data-theme="daitune"]) .hand-toggle-right:focus-visible,
++body[data-theme]:not([data-theme="daitune"]) .hand-toggle-right:hover,
++body[data-theme]:not([data-theme="daitune"]) .hands-control-card,
++body[data-theme]:not([data-theme="daitune"]) .hands-toggle,
++body[data-theme]:not([data-theme="daitune"]) .hands-toggle-button,
++body[data-theme]:not([data-theme="daitune"]) .hands-toggle-button.is-active,
++body[data-theme]:not([data-theme="daitune"]) .hands-toggle-row,
++body[data-theme]:not([data-theme="daitune"]) .home-lesson-delete-button,
++body[data-theme]:not([data-theme="daitune"]) .home-lesson-delete-button:hover,
++body[data-theme]:not([data-theme="daitune"]) .home-logo-slot,
++body[data-theme]:not([data-theme="daitune"]) .home-upload-button,
++body[data-theme]:not([data-theme="daitune"]) .home-youtube-row,
++body[data-theme]:not([data-theme="daitune"]) .language-toggle-button,
++body[data-theme]:not([data-theme="daitune"]) .legend-confidence,
++body[data-theme]:not([data-theme="daitune"]) .legend-item,
++body[data-theme]:not([data-theme="daitune"]) .legend-pill,
++body[data-theme]:not([data-theme="daitune"]) .lesson-action-button,
++body[data-theme]:not([data-theme="daitune"]) .lesson-action-button:hover,
++body[data-theme]:not([data-theme="daitune"]) .lesson-ai-summary span,
++body[data-theme]:not([data-theme="daitune"]) .library-button,
++body[data-theme]:not([data-theme="daitune"]) .library-button:hover,
++body[data-theme]:not([data-theme="daitune"]) .menu-button,
++body[data-theme]:not([data-theme="daitune"]) .metronome-pill input[type="number"],
++body[data-theme]:not([data-theme="daitune"]) .mini-control-pill,
++body[data-theme]:not([data-theme="daitune"]) .mini-control-pill .mini-mode-switch,
++body[data-theme]:not([data-theme="daitune"]) .mini-control-pill .mini-mode-switch button.active,
++body[data-theme]:not([data-theme="daitune"]) .mini-control-pill .mini-mode-switch button:hover,
++body[data-theme]:not([data-theme="daitune"]) .mini-mode-switch,
++body[data-theme]:not([data-theme="daitune"]) .mini-mode-switch button.active,
++body[data-theme]:not([data-theme="daitune"]) .mini-mode-switch button:hover,
++body[data-theme]:not([data-theme="daitune"]) .mode-switch,
++body[data-theme]:not([data-theme="daitune"]) .mode-switch button.active,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-field input,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-source-tabs,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-source-tabs button.active,
++body[data-theme]:not([data-theme="daitune"]) .premium-controls,
++body[data-theme]:not([data-theme="daitune"]) .preprocess-expand-button,
++body[data-theme]:not([data-theme="daitune"]) .preprocess-toggle-row,
++body[data-theme]:not([data-theme="daitune"]) .primary-control,
++body[data-theme]:not([data-theme="daitune"]) .progress-fill,
++body[data-theme]:not([data-theme="daitune"]) .progress-pill,
++body[data-theme]:not([data-theme="daitune"]) .progress-pill::before,
++body[data-theme]:not([data-theme="daitune"]) .secondary,
++body[data-theme]:not([data-theme="daitune"]) .session-item-delete-button,
++body[data-theme]:not([data-theme="daitune"]) .session-item-delete-button:hover,
++body[data-theme]:not([data-theme="daitune"]) .session-item-edit-button,
++body[data-theme]:not([data-theme="daitune"]) .session-item-edit-button:hover,
++body[data-theme]:not([data-theme="daitune"]) .session-list-item,
++body[data-theme]:not([data-theme="daitune"]) .session-list-item.active,
++body[data-theme]:not([data-theme="daitune"]) .session-list-item:hover,
++body[data-theme]:not([data-theme="daitune"]) .sessions-close-button,
++body[data-theme]:not([data-theme="daitune"]) .sessions-current-card,
++body[data-theme]:not([data-theme="daitune"]) .sessions-pencil-button,
++body[data-theme]:not([data-theme="daitune"]) .sessions-popover,
++body[data-theme]:not([data-theme="daitune"]) .sessions-rename-button,
++body[data-theme]:not([data-theme="daitune"]) .sheet-caption,
++body[data-theme]:not([data-theme="daitune"]) .sheet-card,
++body[data-theme]:not([data-theme="daitune"]) .status-pill,
++body[data-theme]:not([data-theme="daitune"]) .title-edit-button,
++body[data-theme]:not([data-theme="daitune"]) .view-icon-mix::after,
++body[data-theme]:not([data-theme="daitune"]) .view-icon-sheet::after,
++body[data-theme]:not([data-theme="daitune"]) .view-switch button,
++body[data-theme]:not([data-theme="daitune"]) .view-switch button.active,
++body[data-theme]:not([data-theme="daitune"]) .view-switch-hero,
++body[data-theme]:not([data-theme="daitune"]) .view-switch-hero button.active,
++body[data-theme]:not([data-theme="daitune"]) .view-switch-hero button:hover,
++body[data-theme]:not([data-theme="daitune"]) /* 2) Low confidence секцията да стане като останалите по височина */
++.confidence-legend,
++body[data-theme]:not([data-theme="daitune"]) /* 3) самото пунктирно "block" */
++.confidence-block-indicator,
++body[data-theme]:not([data-theme="daitune"]) /* Back button: centered,
++body[data-theme]:not([data-theme="daitune"]) /* Display block: taller and aligned with Hands */
++.mode-switch,
++body[data-theme]:not([data-theme="daitune"]) /* Low confidence chip */
++.confidence-legend,
++body[data-theme]:not([data-theme="daitune"]) /* Optional purple active state,
++body[data-theme]:not([data-theme="daitune"]) /* Progress pill with star icon */
++.progress-pill,
++body[data-theme]:not([data-theme="daitune"]) /* Settings button */
++.settings-button,
++body[data-theme]:not([data-theme="daitune"]) /* Tempo block: make it feel like a real section */
++.tempo-control,
++body[data-theme]:not([data-theme="daitune"]) /* Tiny illustrative icons inside view buttons */
++.view-icon,
++body[data-theme]:not([data-theme="daitune"]) /* View switch becomes one premium segmented capsule */
++.view-switch,
++body[data-theme]:not([data-theme="daitune"]) /* View switch: one group,
++body[data-theme]:not([data-theme="daitune"]) but clearer separated buttons */
++.view-switch,
++body[data-theme]:not([data-theme="daitune"]) button,
++body[data-theme]:not([data-theme="daitune"]) same visual language */
++.back-button {
++  background: var(--surface-soft);
++  border-color: var(--surface-border);
++}
++
++body[data-theme]:not([data-theme="daitune"]) .compact-option-panel,
++body[data-theme]:not([data-theme="daitune"]) .drawer-action-button,
++body[data-theme]:not([data-theme="daitune"]) .drawer-action-button-primary,
++body[data-theme]:not([data-theme="daitune"]) .drawer-home-button,
++body[data-theme]:not([data-theme="daitune"]) .drawer-home-button:hover,
++body[data-theme]:not([data-theme="daitune"]) .drawer-logo-slot,
++body[data-theme]:not([data-theme="daitune"]) .drawer-section-title-icon,
++body[data-theme]:not([data-theme="daitune"]) .drawer-settings-list,
++body[data-theme]:not([data-theme="daitune"]) .home-app-header,
++body[data-theme]:not([data-theme="daitune"]) .home-hero-card,
++body[data-theme]:not([data-theme="daitune"]) .home-lesson-card,
++body[data-theme]:not([data-theme="daitune"]) .lesson-player-bar,
++body[data-theme]:not([data-theme="daitune"]) .lesson-stage,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-modal,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-preprocess-panel,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-source-panel,
++body[data-theme]:not([data-theme="daitune"]) .sessions-drawer,
++body[data-theme]:not([data-theme="daitune"]) .settings-panel,
++body[data-theme]:not([data-theme="daitune"]) .top-player-bar,
++body[data-theme]:not([data-theme="daitune"]) /* ============================================================= */
++/* ==================  Settings panel  ========================= */
++/* ============================================================= */
++
++.settings-gear-button {
++  background: var(--surface-card);
++  border-color: var(--surface-border);
++  box-shadow: var(--shadow-card);
++}
++
++body[data-theme]:not([data-theme="daitune"]) .back-arrow-icon,
++body[data-theme]:not([data-theme="daitune"]) .back-button,
++body[data-theme]:not([data-theme="daitune"]) .bottom-section-title,
++body[data-theme]:not([data-theme="daitune"]) .bottom-time,
++body[data-theme]:not([data-theme="daitune"]) .compact-confidence-pill,
++body[data-theme]:not([data-theme="daitune"]) .compact-select-control,
++body[data-theme]:not([data-theme="daitune"]) .compact-select-control select,
++body[data-theme]:not([data-theme="daitune"]) .compact-time-pill,
++body[data-theme]:not([data-theme="daitune"]) .confidence-legend,
++body[data-theme]:not([data-theme="daitune"]) .control-button,
++body[data-theme]:not([data-theme="daitune"]) .display-chip,
++body[data-theme]:not([data-theme="daitune"]) .display-chip.is-active,
++body[data-theme]:not([data-theme="daitune"]) .drawer-action-button,
++body[data-theme]:not([data-theme="daitune"]) .drawer-action-button-primary,
++body[data-theme]:not([data-theme="daitune"]) .drawer-home-button,
++body[data-theme]:not([data-theme="daitune"]) .drawer-home-button small,
++body[data-theme]:not([data-theme="daitune"]) .drawer-logo-slot,
++body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button,
++body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button-accent .drawer-nav-icon,
++body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button-accent:hover .drawer-nav-icon,
++body[data-theme]:not([data-theme="daitune"]) .drawer-nav-copy small,
++body[data-theme]:not([data-theme="daitune"]) .drawer-nav-copy strong,
++body[data-theme]:not([data-theme="daitune"]) .drawer-nav-icon,
++body[data-theme]:not([data-theme="daitune"]) .drawer-section-header,
++body[data-theme]:not([data-theme="daitune"]) .drawer-section-header strong,
++body[data-theme]:not([data-theme="daitune"]) .drawer-section-title-icon,
++body[data-theme]:not([data-theme="daitune"]) .drawer-settings-list span,
++body[data-theme]:not([data-theme="daitune"]) .eyebrow,
++body[data-theme]:not([data-theme="daitune"]) .hand-illustration.left,
++body[data-theme]:not([data-theme="daitune"]) .hand-toggle,
++body[data-theme]:not([data-theme="daitune"]) .hand-toggle-left,
++body[data-theme]:not([data-theme="daitune"]) .hands-control,
++body[data-theme]:not([data-theme="daitune"]) .hands-control-title,
++body[data-theme]:not([data-theme="daitune"]) .hands-label,
++body[data-theme]:not([data-theme="daitune"]) .hands-title-inline,
++body[data-theme]:not([data-theme="daitune"]) .home-brand-block h1,
++body[data-theme]:not([data-theme="daitune"]) .home-brand-block span,
++body[data-theme]:not([data-theme="daitune"]) .home-hero-copy h1,
++body[data-theme]:not([data-theme="daitune"]) .home-hero-copy p:not(.eyebrow),
++body[data-theme]:not([data-theme="daitune"]) .home-lesson-card,
++body[data-theme]:not([data-theme="daitune"]) .home-lesson-card small,
++body[data-theme]:not([data-theme="daitune"]) .home-lesson-card span,
++body[data-theme]:not([data-theme="daitune"]) .home-lesson-card strong,
++body[data-theme]:not([data-theme="daitune"]) .home-section-header h2,
++body[data-theme]:not([data-theme="daitune"]) .home-section-header span,
++body[data-theme]:not([data-theme="daitune"]) .home-upload-button,
++body[data-theme]:not([data-theme="daitune"]) .home-youtube-row input,
++body[data-theme]:not([data-theme="daitune"]) .home-youtube-row input::placeholder,
++body[data-theme]:not([data-theme="daitune"]) .language-toggle-button,
++body[data-theme]:not([data-theme="daitune"]) .legend,
++body[data-theme]:not([data-theme="daitune"]) .legend-pill,
++body[data-theme]:not([data-theme="daitune"]) .legend.hand-legend,
++body[data-theme]:not([data-theme="daitune"]) .lesson-action-button,
++body[data-theme]:not([data-theme="daitune"]) .lesson-ai-summary span,
++body[data-theme]:not([data-theme="daitune"]) .lesson-player-label,
++body[data-theme]:not([data-theme="daitune"]) .lesson-player-time-row strong,
++body[data-theme]:not([data-theme="daitune"]) .lesson-title,
++body[data-theme]:not([data-theme="daitune"]) .library-button,
++body[data-theme]:not([data-theme="daitune"]) .menu-button,
++body[data-theme]:not([data-theme="daitune"]) .mini-control-pill .mini-mode-label,
++body[data-theme]:not([data-theme="daitune"]) .mini-control-pill .mini-mode-switch button,
++body[data-theme]:not([data-theme="daitune"]) .mini-control-pill .mini-mode-switch button.active,
++body[data-theme]:not([data-theme="daitune"]) .mini-control-pill .mini-mode-switch button:hover,
++body[data-theme]:not([data-theme="daitune"]) .mini-mode-label,
++body[data-theme]:not([data-theme="daitune"]) .mini-mode-switch button,
++body[data-theme]:not([data-theme="daitune"]) .mini-mode-switch button.active,
++body[data-theme]:not([data-theme="daitune"]) .mini-mode-switch button:hover,
++body[data-theme]:not([data-theme="daitune"]) .mode-switch > span,
++body[data-theme]:not([data-theme="daitune"]) .mode-switch button,
++body[data-theme]:not([data-theme="daitune"]) .mode-switch button.active,
++body[data-theme]:not([data-theme="daitune"]) .mode-switch span,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-field,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-field input,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-field-hint,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-modal-header h2,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-processing-panel,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-processing-panel span,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-processing-panel strong,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-source-tabs button,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-source-tabs button.active,
++body[data-theme]:not([data-theme="daitune"]) .notes-view-hint,
++body[data-theme]:not([data-theme="daitune"]) .preprocess-expand-button,
++body[data-theme]:not([data-theme="daitune"]) .preprocess-master-toggle small,
++body[data-theme]:not([data-theme="daitune"]) .preprocess-master-toggle strong,
++body[data-theme]:not([data-theme="daitune"]) .preprocess-toggle-row small,
++body[data-theme]:not([data-theme="daitune"]) .preprocess-toggle-row strong,
++body[data-theme]:not([data-theme="daitune"]) .progress-pill,
++body[data-theme]:not([data-theme="daitune"]) .progress-pill::before,
++body[data-theme]:not([data-theme="daitune"]) .session-item-edit-button,
++body[data-theme]:not([data-theme="daitune"]) .session-item-edit-button:hover,
++body[data-theme]:not([data-theme="daitune"]) .session-list-item,
++body[data-theme]:not([data-theme="daitune"]) .session-list-item span,
++body[data-theme]:not([data-theme="daitune"]) .sessions-close-button,
++body[data-theme]:not([data-theme="daitune"]) .sessions-current-card span,
++body[data-theme]:not([data-theme="daitune"]) .sessions-current-card strong,
++body[data-theme]:not([data-theme="daitune"]) .sessions-current-meta,
++body[data-theme]:not([data-theme="daitune"]) .sessions-current-title-row strong,
++body[data-theme]:not([data-theme="daitune"]) .sessions-drawer-eyebrow,
++body[data-theme]:not([data-theme="daitune"]) .sessions-drawer-header h2,
++body[data-theme]:not([data-theme="daitune"]) .sessions-pencil-button,
++body[data-theme]:not([data-theme="daitune"]) .sessions-popover-header,
++body[data-theme]:not([data-theme="daitune"]) .sessions-popover-header span,
++body[data-theme]:not([data-theme="daitune"]) .sessions-rename-button,
++body[data-theme]:not([data-theme="daitune"]) .sheet-caption,
++body[data-theme]:not([data-theme="daitune"]) .sheet-note.is-active,
++body[data-theme]:not([data-theme="daitune"]) .source-separation-toggle small,
++body[data-theme]:not([data-theme="daitune"]) .source-separation-toggle strong,
++body[data-theme]:not([data-theme="daitune"]) .status-pill,
++body[data-theme]:not([data-theme="daitune"]) .tempo-control,
++body[data-theme]:not([data-theme="daitune"]) .tempo-value,
++body[data-theme]:not([data-theme="daitune"]) .time-readout,
++body[data-theme]:not([data-theme="daitune"]) .title-edit-button,
++body[data-theme]:not([data-theme="daitune"]) .view-switch button,
++body[data-theme]:not([data-theme="daitune"]) .view-switch button.active,
++body[data-theme]:not([data-theme="daitune"]) .view-switch-hero button,
++body[data-theme]:not([data-theme="daitune"]) .view-switch-hero button.active,
++body[data-theme]:not([data-theme="daitune"]) /* =========================================================
++   LESSON API LOAD STATUS
++   ========================================================= */
++
++.lesson-load-status,
++body[data-theme]:not([data-theme="daitune"]) /* =========================================================
++   SVG HAND CONTROLS — no emoji,
++body[data-theme]:not([data-theme="daitune"]) /* Low confidence chip */
++.confidence-legend,
++body[data-theme]:not([data-theme="daitune"]) /* Push legend to the right side */
++.hand-legend,
++body[data-theme]:not([data-theme="daitune"]) /* Settings button */
++.settings-button,
++body[data-theme]:not([data-theme="daitune"]) /* Tempo block: make it feel like a real section */
++.tempo-control,
++body[data-theme]:not([data-theme="daitune"]) /* Time aligned inside the same section */
++.time-readout,
++body[data-theme]:not([data-theme="daitune"]) button,
++body[data-theme]:not([data-theme="daitune"]) premium segmented control
++   ========================================================= */
++
++.hands-control {
++  color: var(--text-primary);
++}
++
++
++/* Manual finishing touches for full-theme coverage */
++
++body[data-theme]:not([data-theme="daitune"]) .app-shell {
++  color: var(--text-primary);
++}
++
++body[data-theme]:not([data-theme="daitune"]) .lesson-stage {
++  background: transparent;
++}
++
++body[data-theme]:not([data-theme="daitune"]) .eyebrow,
++body[data-theme]:not([data-theme="daitune"]) .lesson-ai-summary span,
++body[data-theme]:not([data-theme="daitune"]) .mini-mode-label,
++body[data-theme]:not([data-theme="daitune"]) .drawer-nav-copy small,
++body[data-theme]:not([data-theme="daitune"]) .home-brand-block span,
++body[data-theme]:not([data-theme="daitune"]) .home-section-header span {
++  color: var(--text-secondary);
++}
++
++body[data-theme]:not([data-theme="daitune"]) .mini-mode-switch button.active,
++body[data-theme]:not([data-theme="daitune"]) .mode-switch button.active,
++body[data-theme]:not([data-theme="daitune"]) .view-switch button.active,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-source-tabs button.active,
++body[data-theme]:not([data-theme="daitune"]) .hands-toggle-button.is-active,
++body[data-theme]:not([data-theme="daitune"]) .display-chip.is-active {
++  background: var(--switch-active-bg);
++  color: var(--switch-active-text);
++}
++
++body[data-theme]:not([data-theme="daitune"]) select,
++body[data-theme]:not([data-theme="daitune"]) textarea,
++body[data-theme]:not([data-theme="daitune"]) input {
++  background: var(--surface-input);
++  border-color: var(--surface-border);
++  color: var(--text-primary);
++}
++
++body[data-theme]:not([data-theme="daitune"]) input::placeholder,
++body[data-theme]:not([data-theme="daitune"]) textarea::placeholder {
++  color: var(--text-muted);
++}
++
++body[data-theme]:not([data-theme="daitune"]) ::-webkit-scrollbar {
++  width: 10px;
++  height: 10px;
++}
++
++body[data-theme]:not([data-theme="daitune"]) ::-webkit-scrollbar-thumb {
++  background: var(--surface-border);
++  border-radius: 999px;
++}
++
++body[data-theme]:not([data-theme="daitune"]) ::-webkit-scrollbar-track {
++  background: transparent;
++}
++
++/* ===== Piano range settings controls ===== */
++
++.piano-range-presets {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 6px;
++}
++
++.piano-preset-chip {
++  padding: 6px 11px;
++  border-radius: 999px;
++  border: 1.4px solid var(--surface-border, rgba(179, 166, 228, 0.42));
++  background: var(--surface-soft, rgba(255, 255, 255, 0.5));
++  color: var(--text-secondary);
++  font-weight: 800;
++  font-size: 12.5px;
++  cursor: pointer;
++}
++
++.piano-preset-chip.active {
++  background: var(--switch-active-bg, #7a6ef0);
++  border-color: var(--switch-active-bg, #7a6ef0);
++  color: var(--switch-active-text, #fff);
++}
++
++.piano-range-selects {
++  display: flex;
++  align-items: flex-end;
++  gap: 10px;
++}
++
++.piano-range-selects label {
++  display: flex;
++  flex-direction: column;
++  gap: 4px;
++  font-size: 11.5px;
++  font-weight: 700;
++  color: var(--text-muted);
++}
++
++.piano-range-selects select {
++  padding: 6px 8px;
++  border-radius: 10px;
++  border: 1px solid var(--surface-border, rgba(179, 166, 228, 0.42));
++  background: var(--surface-input, rgba(255, 255, 255, 0.7));
++  color: var(--text-primary);
++  font-weight: 700;
++}
++
++.piano-range-count {
++  margin-left: auto;
++  font-size: 12px;
++  font-weight: 800;
++  color: var(--text-secondary);
++  padding-bottom: 8px;
++}
