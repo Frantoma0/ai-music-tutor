@@ -20,27 +20,63 @@ import { buildPracticeNotes } from "./practiceNotes";
 
 export const PLAYABILITY_DEFAULTS = {
   // Pass 1 – dust
-  dustMaxDurationSeconds: 0.075,
+  dustMaxDurationSeconds: 0.085,
   dustMaxConfidence: 0.55,
-  dustMaxVelocity: 16,
+  dustMaxVelocity: 18,
 
-  // Pass 2 – onset clustering (chord grouping)
+  // Pass 2 – adaptive confidence floor (quantile-based)
+  confidenceQuantile: 0.15,
+  confidenceFloorMin: 0.32,
+  confidenceFloorMax: 0.5,
+
+  // Pass 3 – onset clustering (chord grouping)
   onsetClusterWindowSeconds: 0.035,
 
-  // Pass 3 – harmonic ghosts
-  ghostIntervals: [12, 19, 24],
+  // Pass 4 – harmonic ghosts (same onset + sustained across time)
+  ghostIntervals: [12, 19, 24, 28],
   ghostConfidenceSlack: 0.05,
   ghostVelocitySlack: 10,
   ghostMaxDurationRatio: 1.2,
+  sustainedGhostTailSeconds: 0.14,
   melodyProtectConfidence: 0.78,
 
-  // Pass 4 – polyphony cap
+  // Pass 5 – polyphony cap
   maxVoicesPerHand: 3,
   maxVoicesTotal: 6,
 
-  // Pass 5 – smoothing
+  // Pass 6 – density cap (per hand, per second)
+  maxNotesPerSecondRight: 9,
+  maxNotesPerSecondLeft: 7,
+
+  // Pass 7 – smoothing
   minPlaybackDurationSeconds: 0.09,
   mergeGapSeconds: 0.06,
+};
+
+/*
+ * Beginner preset: an arrangement a first-year learner can actually
+ * follow – melody plus simple bass, no dense ornaments, no weak notes.
+ */
+export const BEGINNER_OVERRIDES = {
+  dustMaxDurationSeconds: 0.11,
+  dustMaxConfidence: 0.62,
+  confidenceQuantile: 0.3,
+  confidenceFloorMin: 0.42,
+  confidenceFloorMax: 0.62,
+  ghostConfidenceSlack: 0.12,
+  ghostVelocitySlack: 18,
+  sustainedGhostTailSeconds: 0.22,
+  maxVoicesPerHand: 2,
+  maxVoicesTotal: 3,
+  maxNotesPerSecondRight: 5,
+  maxNotesPerSecondLeft: 3,
+  minPlaybackDurationSeconds: 0.13,
+  mergeGapSeconds: 0.1,
+};
+
+export const SIMPLIFY_LEVELS = {
+  practice: PLAYABILITY_DEFAULTS,
+  beginner: { ...PLAYABILITY_DEFAULTS, ...BEGINNER_OVERRIDES },
 };
 
 function toNumber(value, fallback = 0) {
@@ -312,16 +348,220 @@ function enforceMinimumDurations(notes, minDuration) {
 }
 
 /* ---------------------------------------------------------------- */
+/* Pass 2 – adaptive confidence floor                                 */
+/* ---------------------------------------------------------------- */
+
+function applyConfidenceFloor(notes, options) {
+  const confidences = notes
+    .map((note) =>
+      note.confidence === null || note.confidence === undefined
+        ? null
+        : toNumber(note.confidence)
+    )
+    .filter((value) => value !== null)
+    .sort((a, b) => a - b);
+
+  // Only meaningful when most notes carry a confidence value.
+  if (confidences.length < notes.length * 0.6 || confidences.length < 8) {
+    return notes;
+  }
+
+  const index = Math.floor(confidences.length * options.confidenceQuantile);
+  const quantileValue = confidences[Math.min(index, confidences.length - 1)];
+  const floor = Math.min(
+    options.confidenceFloorMax,
+    Math.max(options.confidenceFloorMin, quantileValue)
+  );
+
+  return notes.filter((note) => {
+    if (note.confidence === null || note.confidence === undefined) {
+      return true;
+    }
+
+    if (toNumber(note.confidence) >= floor) {
+      return true;
+    }
+
+    // A long, loud note is real even when the model was unsure.
+    return note.duration > 0.4 && noteVelocity(note) >= 64;
+  });
+}
+
+/* ---------------------------------------------------------------- */
+/* Pass 4b – sustained harmonic ghosts across time                   */
+/*                                                                    */
+/* The classic Basic Pitch artifact on real recordings: while a real  */
+/* note is still sounding, its overtone (+1 or +2 octaves, or an      */
+/* octave + fifth) pops in as a separate weak note some 50–200 ms     */
+/* later. Same-onset clustering cannot catch these; a sweep over the  */
+/* currently sounding notes can.                                      */
+/* ---------------------------------------------------------------- */
+
+function removeSustainedHarmonicGhosts(notes, options) {
+  const sorted = [...notes].sort((a, b) => a.start - b.start || a.pitch - b.pitch);
+  const kept = [];
+  const removed = new Set();
+
+  for (const note of sorted) {
+    // Fundamentals currently sounding under this note's onset.
+    let isGhost = false;
+
+    for (const lower of kept) {
+      if (removed.has(lower)) continue;
+      if (lower.end <= note.start + 0.02) continue;
+      if (lower.start >= note.start - 0.015) continue; // same-onset pass handles that
+
+      const interval = note.pitch - lower.pitch;
+      if (!options.ghostIntervals.includes(interval)) continue;
+
+      const weakerConfidence =
+        noteConfidence(note) <= noteConfidence(lower) + options.ghostConfidenceSlack;
+      const weakerVelocity =
+        noteVelocity(note) <= noteVelocity(lower) + options.ghostVelocitySlack;
+      const insideTail =
+        note.end <= lower.end + options.sustainedGhostTailSeconds;
+
+      const isProtectedMelody =
+        noteConfidence(note) >= options.melodyProtectConfidence &&
+        noteVelocity(note) >= noteVelocity(lower);
+
+      if (weakerConfidence && weakerVelocity && insideTail && !isProtectedMelody) {
+        isGhost = true;
+        break;
+      }
+    }
+
+    if (!isGhost) {
+      kept.push(note);
+    }
+  }
+
+  return kept;
+}
+
+/* ---------------------------------------------------------------- */
+/* Pass 6 – density cap: keep the strongest notes per hand & second   */
+/* ---------------------------------------------------------------- */
+
+function applyDensityCap(notes, options) {
+  const buckets = new Map(); // `${hand}:${secondBucket}` -> notes[]
+
+  for (const note of notes) {
+    const key = `${noteHand(note)}:${Math.floor(note.start / 0.5)}`;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(note);
+  }
+
+  const dropped = new Set();
+
+  for (const [key, bucketNotes] of buckets) {
+    const hand = key.startsWith("left") ? "left" : "right";
+    const perSecond =
+      hand === "left"
+        ? options.maxNotesPerSecondLeft
+        : options.maxNotesPerSecondRight;
+    const limit = Math.max(1, Math.ceil(perSecond / 2)); // bucket = 0.5 s
+
+    if (bucketNotes.length <= limit) continue;
+
+    const sortedByPitch = [...bucketNotes].sort((a, b) => a.pitch - b.pitch);
+    const essential =
+      hand === "right"
+        ? sortedByPitch[sortedByPitch.length - 1]
+        : sortedByPitch[0];
+
+    const rest = bucketNotes
+      .filter((note) => note !== essential)
+      .sort((a, b) => noteStrength(b) - noteStrength(a));
+
+    for (const note of rest.slice(Math.max(limit - 1, 0))) {
+      dropped.add(note);
+    }
+  }
+
+  return notes.filter((note) => !dropped.has(note));
+}
+
+/* ---------------------------------------------------------------- */
+/* Fit to the learner's own piano                                     */
+/*                                                                    */
+/* 1. Shift the whole piece by the octave that puts the most notes    */
+/*    inside [lowestPitch, highestPitch].                             */
+/* 2. Fold the remaining outliers octave-by-octave into the range     */
+/*    (possible whenever the keyboard spans at least one octave).     */
+/* ---------------------------------------------------------------- */
+
+export function fitNotesToRange(notes = [], lowestPitch = 36, highestPitch = 84) {
+  const low = Math.min(lowestPitch, highestPitch);
+  const high = Math.max(lowestPitch, highestPitch);
+
+  if (!notes.length || high - low < 12) {
+    return notes;
+  }
+
+  let bestShift = 0;
+  let bestScore = -1;
+
+  for (let octaves = -3; octaves <= 3; octaves += 1) {
+    const shift = octaves * 12;
+    let inside = 0;
+
+    for (const note of notes) {
+      const pitch = toNumber(note.pitch) + shift;
+      if (pitch >= low && pitch <= high) inside += 1;
+    }
+
+    const score = inside - Math.abs(octaves) * 0.25; // prefer smaller shifts on ties
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestShift = shift;
+    }
+  }
+
+  return notes.map((note) => {
+    const sourcePitch = toNumber(note.pitch);
+    let pitch = sourcePitch + bestShift;
+
+    while (pitch < low) pitch += 12;
+    while (pitch > high) pitch -= 12;
+
+    if (pitch === sourcePitch) {
+      return note;
+    }
+
+    const mapped = {
+      ...note,
+      pitch,
+      sourcePitch,
+      rangeFitted: true,
+    };
+
+    // Old names would show the pre-shift pitch; recompute lazily in the UI.
+    delete mapped.pitchName;
+    delete mapped.pitch_name;
+
+    return mapped;
+  });
+}
+
+/* ---------------------------------------------------------------- */
 /* Public API                                                        */
 /* ---------------------------------------------------------------- */
 
-export function buildPlayableNotes(notes = [], userOptions = {}) {
-  const options = { ...PLAYABILITY_DEFAULTS, ...userOptions };
+export function buildPlayableNotes(notes = [], levelOrOptions = "practice") {
+  const base =
+    typeof levelOrOptions === "string"
+      ? SIMPLIFY_LEVELS[levelOrOptions] || PLAYABILITY_DEFAULTS
+      : { ...PLAYABILITY_DEFAULTS, ...levelOrOptions };
+  const options = base;
 
   const normalized = normalizeNotes(notes);
-  const withoutDust = normalized.filter((note) => !isDustNote(note, options));
+  let working = normalized.filter((note) => !isDustNote(note, options));
+  working = applyConfidenceFloor(working, options);
+  working = removeSustainedHarmonicGhosts(working, options);
 
-  const clusters = clusterByOnset(withoutDust, options.onsetClusterWindowSeconds);
+  const clusters = clusterByOnset(working, options.onsetClusterWindowSeconds);
   const clusteredResult = [];
 
   for (const cluster of clusters) {
@@ -345,7 +585,9 @@ export function buildPlayableNotes(notes = [], userOptions = {}) {
     }
   }
 
-  const merged = buildPracticeNotes(clusteredResult, {
+  const densityCapped = applyDensityCap(clusteredResult, options);
+
+  const merged = buildPracticeNotes(densityCapped, {
     maxGapSeconds: options.mergeGapSeconds,
   });
 

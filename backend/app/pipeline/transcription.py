@@ -120,6 +120,46 @@ def _extract_note_events(
     return notes
 
 
+def _env_float(name: str, default: float) -> float:
+    import os
+
+    raw = os.environ.get(name)
+
+    if raw is None or raw.strip() == "":
+        return default
+
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def _basic_pitch_settings() -> dict:
+    """
+    Detection thresholds for Basic Pitch, tunable via environment.
+
+    The defaults are intentionally stricter than the library defaults
+    (onset 0.5 / frame 0.3 / min length ~58 ms): real-world YouTube audio
+    with reverb, sustain pedal and compression produces a large number of
+    weak false positives at the library defaults. Raising the thresholds
+    keeps the confident, audible notes and drops overtone ghosts and
+    reverb tails at the source, before any downstream filtering.
+
+        DAITUNE_BP_ONSET_THRESHOLD    default 0.60  (higher = fewer note starts)
+        DAITUNE_BP_FRAME_THRESHOLD    default 0.40  (higher = fewer weak sustains)
+        DAITUNE_BP_MIN_NOTE_LENGTH_MS default 110   (drop sub-110 ms blips)
+        DAITUNE_BP_MIN_FREQUENCY_HZ   default 30    (below piano range = rumble)
+        DAITUNE_BP_MAX_FREQUENCY_HZ   default 4200  (above piano range = hiss)
+    """
+    return {
+        "onset_threshold": _env_float("DAITUNE_BP_ONSET_THRESHOLD", 0.60),
+        "frame_threshold": _env_float("DAITUNE_BP_FRAME_THRESHOLD", 0.40),
+        "minimum_note_length": _env_float("DAITUNE_BP_MIN_NOTE_LENGTH_MS", 110.0),
+        "minimum_frequency": _env_float("DAITUNE_BP_MIN_FREQUENCY_HZ", 30.0),
+        "maximum_frequency": _env_float("DAITUNE_BP_MAX_FREQUENCY_HZ", 4200.0),
+    }
+
+
 def _try_basic_pitch(
     audio_path: Path,
     raw_output_dir: Path,
@@ -145,10 +185,20 @@ def _try_basic_pitch(
         raw_output_dir.mkdir(parents=True, exist_ok=True)
         normalized_midi_path.parent.mkdir(parents=True, exist_ok=True)
 
-        _model_output, midi_data, note_events = predict(
-            audio_path,
-            model_or_model_path=ICASSP_2022_MODEL_PATH,
-        )
+        settings = _basic_pitch_settings()
+
+        try:
+            _model_output, midi_data, note_events = predict(
+                audio_path,
+                model_or_model_path=ICASSP_2022_MODEL_PATH,
+                **settings,
+            )
+        except TypeError:
+            # Older basic_pitch versions without these keyword arguments.
+            _model_output, midi_data, note_events = predict(
+                audio_path,
+                model_or_model_path=ICASSP_2022_MODEL_PATH,
+            )
 
         midi_data.write(str(normalized_midi_path))
 

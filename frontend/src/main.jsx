@@ -10,7 +10,7 @@ import HandsControl from "./components/HandsControl.jsx";
 import { PianoKeyboard } from "./components/PianoKeyboard";
 import { WaterfallCanvas } from "./components/WaterfallCanvas";
 import SheetView from "./components/SheetView.jsx";
-import { buildPlayableNotes, getPlayabilityStats } from "./lib/playability";
+import { buildPlayableNotes, getPlayabilityStats, fitNotesToRange } from "./lib/playability";
 import { createMicPitchDetector } from "./lib/pitchDetection";
 import {
   UI_THEMES,
@@ -126,6 +126,18 @@ const UI_COPY = {
     "controls.symbol": "♪",
     "controls.notes": "Notes",
     "controls.mic": "Mic",
+    "notes.beginner": "Beginner",
+    "notes.hintRaw": "Raw view shows the original transcription.",
+    "notes.hintPractice": "Practice: cleaned, playable arrangement",
+    "notes.hintBeginner": "Beginner: melody + simple bass only",
+    "notes.hidden": "artifacts hidden",
+    "settings.piano": "My piano",
+    "settings.pianoSize": "Keyboard size",
+    "settings.pianoFrom": "From",
+    "settings.pianoTo": "To",
+    "settings.pianoKeys": "keys",
+    "settings.fitRange": "Fit songs to my piano range",
+    "settings.custom": "Custom",
     "mic.on": "On",
     "mic.off": "Off",
     "mic.listening": "Listening",
@@ -248,6 +260,18 @@ const UI_COPY = {
     "controls.symbol": "♪",
     "controls.notes": "Ноти",
     "controls.mic": "Микрофон",
+    "notes.beginner": "Начинаещ",
+    "notes.hintRaw": "Raw показва оригиналната транскрипция.",
+    "notes.hintPractice": "Practice: изчистен, реален за свирене аранжимент",
+    "notes.hintBeginner": "Начинаещ: само мелодия + прост бас",
+    "notes.hidden": "скрити артефакта",
+    "settings.piano": "Моето пиано",
+    "settings.pianoSize": "Размер на клавиатурата",
+    "settings.pianoFrom": "От",
+    "settings.pianoTo": "До",
+    "settings.pianoKeys": "клавиша",
+    "settings.fitRange": "Напасвай песните към моето пиано",
+    "settings.custom": "По избор",
     "mic.on": "Вкл",
     "mic.off": "Изкл",
     "mic.listening": "Слуша",
@@ -666,6 +690,39 @@ function formatPlaybackTime(seconds = 0) {
 
 
 
+const PIANO_RANGE_PRESETS = [
+  { id: "88", label: "88", low: 21, high: 108 },
+  { id: "76", label: "76", low: 28, high: 103 },
+  { id: "61", label: "61", low: 36, high: 96 },
+  { id: "49", label: "49", low: 48, high: 96 },
+  { id: "44", label: "44", low: 41, high: 84 },
+  { id: "37", label: "37", low: 48, high: 84 },
+  { id: "32", label: "32", low: 53, high: 84 },
+];
+
+const PIANO_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+function midiNoteLabel(midi) {
+  const name = PIANO_NOTE_NAMES[((midi % 12) + 12) % 12];
+  const octave = Math.floor(midi / 12) - 1;
+  return `${name}${octave}`;
+}
+
+function loadStoredPianoRange() {
+  try {
+    const low = parseInt(localStorage.getItem("daitune-piano-low"), 10);
+    const high = parseInt(localStorage.getItem("daitune-piano-high"), 10);
+
+    if (Number.isFinite(low) && Number.isFinite(high) && high - low >= 12) {
+      return { low, high };
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return { low: 36, high: 84 };
+}
+
 function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -712,6 +769,14 @@ function App() {
   // Appearance
   const [uiThemeId, setUiThemeId] = useState(loadStoredUiThemeId);
   const [blockPaletteId, setBlockPaletteId] = useState(loadStoredBlockPaletteId);
+  const [pianoRange, setPianoRange] = useState(loadStoredPianoRange);
+  const [fitToRange, setFitToRange] = useState(() => {
+    try {
+      return localStorage.getItem("daitune-fit-range") !== "0";
+    } catch {
+      return true;
+    }
+  });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Practice tools
@@ -737,6 +802,23 @@ function App() {
   useEffect(() => {
     applyBlockPalette(blockPaletteId);
   }, [blockPaletteId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("daitune-piano-low", String(pianoRange.low));
+      localStorage.setItem("daitune-piano-high", String(pianoRange.high));
+    } catch {
+      /* ignore */
+    }
+  }, [pianoRange]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("daitune-fit-range", fitToRange ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [fitToRange]);
 
   useEffect(() => {
     try {
@@ -835,11 +917,11 @@ function App() {
       : 0;
 
   const playableLessonNotes = React.useMemo(() => {
-    if (noteViewMode !== "practice") {
+    if (noteViewMode === "raw") {
       return lessonNotes;
     }
 
-    return buildPlayableNotes(lessonNotes);
+    return buildPlayableNotes(lessonNotes, noteViewMode);
   }, [lessonNotes, noteViewMode]);
 
   const playabilityStats = React.useMemo(
@@ -847,19 +929,29 @@ function App() {
     [lessonNotes, playableLessonNotes]
   );
 
+  const rangedLessonNotes = React.useMemo(() => {
+    if (!fitToRange) {
+      return playableLessonNotes;
+    }
+
+    return fitNotesToRange(playableLessonNotes, pianoRange.low, pianoRange.high);
+  }, [playableLessonNotes, fitToRange, pianoRange]);
+
   const visibleLessonNotes = React.useMemo(() => {
-    return playableLessonNotes.filter((note) => {
+    return rangedLessonNotes.filter((note) => {
       if (activeHand === "both") return true;
       return note.hand === activeHand;
     });
-  }, [playableLessonNotes, activeHand]);
+  }, [rangedLessonNotes, activeHand]);
 
   const noteViewHint =
-    noteViewMode === "practice"
-      ? playabilityStats.removedCount > 0
-        ? `Practice view: playable arrangement · ${playabilityStats.removedCount} transcription artifacts hidden.`
-        : "Practice view: playable arrangement of the transcription."
-      : "Raw view shows the original transcription.";
+    noteViewMode === "raw"
+      ? t("notes.hintRaw")
+      : `${noteViewMode === "beginner" ? t("notes.hintBeginner") : t("notes.hintPractice")}${
+          playabilityStats.removedCount > 0
+            ? ` · ${playabilityStats.removedCount} ${t("notes.hidden")}`
+            : ""
+        }.`;
 
   const progressPercent = Math.max(
     0,
@@ -2685,6 +2777,87 @@ return (
               </section>
 
               <section className="settings-section">
+                <span className="settings-section-label">{t("settings.piano")}</span>
+
+                <div className="piano-range-presets">
+                  {PIANO_RANGE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      className={`piano-preset-chip ${
+                        pianoRange.low === preset.low && pianoRange.high === preset.high
+                          ? "active"
+                          : ""
+                      }`}
+                      onClick={() => setPianoRange({ low: preset.low, high: preset.high })}
+                      title={`${midiNoteLabel(preset.low)} – ${midiNoteLabel(preset.high)}`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="piano-range-selects">
+                  <label>
+                    <span>{t("settings.pianoFrom")}</span>
+                    <select
+                      value={pianoRange.low}
+                      onChange={(event) => {
+                        const low = Number(event.target.value);
+                        setPianoRange((range) => ({
+                          low,
+                          high: Math.max(range.high, low + 12),
+                        }));
+                      }}
+                    >
+                      {Array.from({ length: 108 - 21 + 1 }, (_, index) => 21 + index)
+                        .filter((midi) => midi <= pianoRange.high - 12)
+                        .map((midi) => (
+                          <option key={midi} value={midi}>
+                            {midiNoteLabel(midi)}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    <span>{t("settings.pianoTo")}</span>
+                    <select
+                      value={pianoRange.high}
+                      onChange={(event) => {
+                        const high = Number(event.target.value);
+                        setPianoRange((range) => ({
+                          low: Math.min(range.low, high - 12),
+                          high,
+                        }));
+                      }}
+                    >
+                      {Array.from({ length: 108 - 21 + 1 }, (_, index) => 21 + index)
+                        .filter((midi) => midi >= pianoRange.low + 12)
+                        .map((midi) => (
+                          <option key={midi} value={midi}>
+                            {midiNoteLabel(midi)}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+
+                  <span className="piano-range-count">
+                    {pianoRange.high - pianoRange.low + 1} {t("settings.pianoKeys")}
+                  </span>
+                </div>
+
+                <label className="settings-toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={fitToRange}
+                    onChange={(event) => setFitToRange(event.target.checked)}
+                  />
+                  <span>{t("settings.fitRange")}</span>
+                </label>
+              </section>
+
+              <section className="settings-section">
                 <label className="settings-toggle-row">
                   <input
                     type="checkbox"
@@ -2779,6 +2952,8 @@ return (
                   judgements={noteJudgements}
                   colors={canvasPalette}
                   stage={uiTheme.stage}
+                  lowestPitch={pianoRange.low}
+                  highestPitch={pianoRange.high}
                 />
               </div>
 
@@ -2790,6 +2965,8 @@ return (
                 labelMode={keyboardLabelMode}
                 livePitch={detectedMidi}
                 wrongPitches={wrongPitchSet}
+                lowestPitch={pianoRange.low}
+                highestPitch={pianoRange.high}
               />
             </>
           )}
@@ -2830,6 +3007,8 @@ return (
                   judgements={noteJudgements}
                   colors={canvasPalette}
                   stage={uiTheme.stage}
+                  lowestPitch={pianoRange.low}
+                  highestPitch={pianoRange.high}
                 />
               </div>
 
@@ -2841,6 +3020,8 @@ return (
                 labelMode={keyboardLabelMode}
                 livePitch={detectedMidi}
                 wrongPitches={wrongPitchSet}
+                lowestPitch={pianoRange.low}
+                highestPitch={pianoRange.high}
               />
             </>
           )}
@@ -2924,6 +3105,14 @@ return (
                 onClick={() => setNoteViewMode("practice")}
               >
                 Practice
+              </button>
+
+              <button
+                type="button"
+                className={noteViewMode === "beginner" ? "active" : ""}
+                onClick={() => setNoteViewMode("beginner")}
+              >
+                {t("notes.beginner")}
               </button>
             </div>
           </div>
