@@ -1,0 +1,1449 @@
+diff --git a/backend/app/api/progress.py b/backend/app/api/progress.py
+new file mode 100644
+index 0000000..f4933b9
+--- /dev/null
++++ b/backend/app/api/progress.py
+@@ -0,0 +1,60 @@
++"""API endpoints for per-lesson practice progress and sessions."""
++
++from __future__ import annotations
++
++from fastapi import APIRouter, HTTPException
++from pydantic import BaseModel, Field
++
++from ..db.progress import (
++    list_sessions_for_job,
++    progress_summary,
++    save_position,
++    save_practice_session,
++)
++
++router = APIRouter(prefix="/api/progress", tags=["progress"])
++
++
++class SessionIn(BaseModel):
++    job_id: str = Field(min_length=1, max_length=96)
++    hits: int = Field(ge=0)
++    missed: int = Field(ge=0)
++    wrong: int = Field(ge=0)
++    accuracy: int = Field(ge=0, le=100)
++    stars: int = Field(ge=0, le=3)
++    mode: str | None = Field(default=None, max_length=24)
++    note_view: str | None = Field(default=None, max_length=24)
++    duration_seconds: float | None = Field(default=None, ge=0)
++
++
++class PositionIn(BaseModel):
++    position_seconds: float = Field(ge=0)
++    note_view: str | None = Field(default=None, max_length=24)
++
++
++@router.post("")
++async def create_session(payload: SessionIn) -> dict:
++    record = await save_practice_session(**payload.model_dump())
++    return {"status": "ok", "session": record}
++
++
++@router.put("/{job_id}/position")
++async def update_position(job_id: str, payload: PositionIn) -> dict:
++    if not job_id or len(job_id) > 96:
++        raise HTTPException(status_code=400, detail="Invalid job_id")
++
++    await save_position(job_id, payload.position_seconds, payload.note_view)
++    return {"status": "ok"}
++
++
++@router.get("/summary")
++async def get_progress_summary() -> dict:
++    return {"summary": await progress_summary()}
++
++
++@router.get("/{job_id}")
++async def get_sessions_for_job(job_id: str) -> dict:
++    if not job_id or len(job_id) > 96:
++        raise HTTPException(status_code=400, detail="Invalid job_id")
++
++    return {"job_id": job_id, "sessions": await list_sessions_for_job(job_id)}
+diff --git a/backend/app/db/progress.py b/backend/app/db/progress.py
+new file mode 100644
+index 0000000..ead09d6
+--- /dev/null
++++ b/backend/app/db/progress.py
+@@ -0,0 +1,196 @@
++"""
++Per-lesson practice progress and sessions.
++
++Matches the tables declared in schema.sql:
++
++    practice_sessions – one row per finished practice run (the results card)
++    lesson_progress   – one summary row per lesson: best scores, attempt
++                        count, and the last playback position for resume.
++"""
++
++from __future__ import annotations
++
++import asyncio
++import sqlite3
++import uuid
++from datetime import datetime, timezone
++from pathlib import Path
++from typing import Any
++
++from .database import DEFAULT_DB_PATH
++
++
++def _now_iso() -> str:
++    return datetime.now(timezone.utc).isoformat()
++
++
++async def init_progress_schema(db_path: str | Path = DEFAULT_DB_PATH) -> None:
++    def _init() -> None:
++        with sqlite3.connect(str(db_path)) as connection:
++            connection.executescript(
++                """
++                CREATE TABLE IF NOT EXISTS lesson_progress (
++                    job_id TEXT PRIMARY KEY,
++                    last_position_seconds REAL NOT NULL DEFAULT 0,
++                    best_accuracy INTEGER,
++                    best_stars INTEGER NOT NULL DEFAULT 0,
++                    total_attempts INTEGER NOT NULL DEFAULT 0,
++                    last_note_view TEXT,
++                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
++                );
++
++                CREATE TABLE IF NOT EXISTS practice_sessions (
++                    id TEXT PRIMARY KEY,
++                    job_id TEXT NOT NULL,
++                    mode TEXT,
++                    note_view TEXT,
++                    hits INTEGER NOT NULL DEFAULT 0,
++                    missed INTEGER NOT NULL DEFAULT 0,
++                    wrong INTEGER NOT NULL DEFAULT 0,
++                    accuracy INTEGER,
++                    stars INTEGER NOT NULL DEFAULT 0,
++                    duration_seconds REAL,
++                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
++                );
++
++                CREATE INDEX IF NOT EXISTS idx_practice_sessions_job
++                ON practice_sessions (job_id, created_at);
++                """
++            )
++            connection.commit()
++
++    await asyncio.to_thread(_init)
++
++
++async def save_practice_session(
++    job_id: str,
++    hits: int,
++    missed: int,
++    wrong: int,
++    accuracy: int,
++    stars: int,
++    mode: str | None = None,
++    note_view: str | None = None,
++    duration_seconds: float | None = None,
++    db_path: str | Path = DEFAULT_DB_PATH,
++) -> dict[str, Any]:
++    record = {
++        "id": f"ps_{uuid.uuid4().hex[:12]}",
++        "job_id": job_id,
++        "mode": mode,
++        "note_view": note_view,
++        "hits": int(hits),
++        "missed": int(missed),
++        "wrong": int(wrong),
++        "accuracy": int(accuracy),
++        "stars": int(stars),
++        "duration_seconds": duration_seconds,
++        "created_at": _now_iso(),
++    }
++
++    def _write() -> None:
++        with sqlite3.connect(str(db_path)) as connection:
++            connection.execute(
++                """
++                INSERT INTO practice_sessions (
++                    id, job_id, mode, note_view, hits, missed, wrong,
++                    accuracy, stars, duration_seconds, created_at
++                ) VALUES (
++                    :id, :job_id, :mode, :note_view, :hits, :missed, :wrong,
++                    :accuracy, :stars, :duration_seconds, :created_at
++                )
++                """,
++                record,
++            )
++
++            connection.execute(
++                """
++                INSERT INTO lesson_progress (
++                    job_id, best_accuracy, best_stars, total_attempts,
++                    last_note_view, updated_at
++                ) VALUES (:job_id, :accuracy, :stars, 1, :note_view, :created_at)
++                ON CONFLICT(job_id) DO UPDATE SET
++                    best_accuracy = MAX(COALESCE(best_accuracy, 0), :accuracy),
++                    best_stars = MAX(best_stars, :stars),
++                    total_attempts = total_attempts + 1,
++                    last_note_view = COALESCE(:note_view, last_note_view),
++                    updated_at = :created_at
++                """,
++                record,
++            )
++            connection.commit()
++
++    await asyncio.to_thread(_write)
++
++    return record
++
++
++async def save_position(
++    job_id: str,
++    position_seconds: float,
++    note_view: str | None = None,
++    db_path: str | Path = DEFAULT_DB_PATH,
++) -> None:
++    def _write() -> None:
++        with sqlite3.connect(str(db_path)) as connection:
++            connection.execute(
++                """
++                INSERT INTO lesson_progress (
++                    job_id, last_position_seconds, last_note_view, updated_at
++                ) VALUES (?, ?, ?, ?)
++                ON CONFLICT(job_id) DO UPDATE SET
++                    last_position_seconds = excluded.last_position_seconds,
++                    last_note_view = COALESCE(excluded.last_note_view, last_note_view),
++                    updated_at = excluded.updated_at
++                """,
++                (job_id, float(position_seconds), note_view, _now_iso()),
++            )
++            connection.commit()
++
++    await asyncio.to_thread(_write)
++
++
++async def list_sessions_for_job(
++    job_id: str,
++    limit: int = 50,
++    db_path: str | Path = DEFAULT_DB_PATH,
++) -> list[dict[str, Any]]:
++    def _query() -> list[dict[str, Any]]:
++        with sqlite3.connect(str(db_path)) as connection:
++            connection.row_factory = sqlite3.Row
++            rows = connection.execute(
++                """
++                SELECT * FROM practice_sessions
++                WHERE job_id = ?
++                ORDER BY created_at DESC
++                LIMIT ?
++                """,
++                (job_id, limit),
++            ).fetchall()
++
++            return [dict(row) for row in rows]
++
++    return await asyncio.to_thread(_query)
++
++
++async def progress_summary(
++    db_path: str | Path = DEFAULT_DB_PATH,
++) -> dict[str, dict[str, Any]]:
++    def _query() -> dict[str, dict[str, Any]]:
++        with sqlite3.connect(str(db_path)) as connection:
++            connection.row_factory = sqlite3.Row
++            rows = connection.execute("SELECT * FROM lesson_progress").fetchall()
++
++            return {
++                row["job_id"]: {
++                    "attempts": row["total_attempts"],
++                    "best_accuracy": row["best_accuracy"],
++                    "best_stars": row["best_stars"],
++                    "last_position_seconds": row["last_position_seconds"],
++                    "last_note_view": row["last_note_view"],
++                    "last_played": row["updated_at"],
++                }
++                for row in rows
++            }
++
++    return await asyncio.to_thread(_query)
+diff --git a/backend/app/db/schema.sql b/backend/app/db/schema.sql
+index d83c834..10bbcb0 100644
+--- a/backend/app/db/schema.sql
++++ b/backend/app/db/schema.sql
+@@ -170,3 +170,30 @@ ON correction_proposals(correction_run_id);
+ CREATE INDEX IF NOT EXISTS idx_correction_validations_correction_run_id
+ ON correction_validations(correction_run_id);
+ 
++
++CREATE TABLE IF NOT EXISTS lesson_progress (
++    job_id TEXT PRIMARY KEY,
++    last_position_seconds REAL NOT NULL DEFAULT 0,
++    best_accuracy INTEGER,
++    best_stars INTEGER NOT NULL DEFAULT 0,
++    total_attempts INTEGER NOT NULL DEFAULT 0,
++    last_note_view TEXT,
++    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
++);
++
++CREATE TABLE IF NOT EXISTS practice_sessions (
++    id TEXT PRIMARY KEY,
++    job_id TEXT NOT NULL,
++    mode TEXT,
++    note_view TEXT,
++    hits INTEGER NOT NULL DEFAULT 0,
++    missed INTEGER NOT NULL DEFAULT 0,
++    wrong INTEGER NOT NULL DEFAULT 0,
++    accuracy INTEGER,
++    stars INTEGER NOT NULL DEFAULT 0,
++    duration_seconds REAL,
++    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
++);
++
++CREATE INDEX IF NOT EXISTS idx_practice_sessions_job
++    ON practice_sessions (job_id, created_at DESC);
+diff --git a/backend/app/main.py b/backend/app/main.py
+index 7149d4a..0417081 100644
+--- a/backend/app/main.py
++++ b/backend/app/main.py
+@@ -9,6 +9,8 @@ from app.api.uploads import router as uploads_router
+ from app.api.ws import router as ws_router
+ from app.db.database import DEFAULT_DB_PATH, initialize_database
+ from app.api.pipeline_runs import router as pipeline_runs_router
++from app.api.progress import router as progress_router
++from app.db.progress import init_progress_schema
+ 
+ 
+ app = FastAPI(
+@@ -36,10 +38,12 @@ app.include_router(lessons_router)
+ app.include_router(uploads_router)
+ app.include_router(ws_router)
+ app.include_router(pipeline_runs_router)
++app.include_router(progress_router)
+ 
+ @app.on_event("startup")
+ async def initialize_app_database() -> None:
+     await initialize_database(DEFAULT_DB_PATH)
++    await init_progress_schema(DEFAULT_DB_PATH)
+ 
+ @app.get("/health")
+ def health() -> dict:
+diff --git a/frontend/src/api/lessonApi.js b/frontend/src/api/lessonApi.js
+index 2171533..8b2808c 100644
+--- a/frontend/src/api/lessonApi.js
++++ b/frontend/src/api/lessonApi.js
+@@ -294,4 +294,50 @@ export async function updatePipelineRunThumbnail(jobId, thumbnailUrl) {
+   }
+ 
+   return response.json();
+-}
+\ No newline at end of file
++}
++
++export async function saveLessonProgress(payload) {
++  const response = await fetch(`${API_BASE_URL}/api/progress`, {
++    method: "POST",
++    headers: { "Content-Type": "application/json" },
++    body: JSON.stringify(payload),
++  });
++
++  if (!response.ok) {
++    throw new Error(`Progress save failed: ${response.status}`);
++  }
++
++  return response.json();
++}
++
++export async function fetchProgressSummary() {
++  const response = await fetch(`${API_BASE_URL}/api/progress/summary`);
++
++  if (!response.ok) {
++    throw new Error(`Progress summary failed: ${response.status}`);
++  }
++
++  const data = await response.json();
++  return data.summary || {};
++}
++
++
++export async function saveLessonPosition(jobId, positionSeconds, noteView) {
++  const response = await fetch(
++    `${API_BASE_URL}/api/progress/${encodeURIComponent(jobId)}/position`,
++    {
++      method: "PUT",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify({
++        position_seconds: positionSeconds,
++        note_view: noteView,
++      }),
++    }
++  );
++
++  if (!response.ok) {
++    throw new Error(`Position save failed: ${response.status}`);
++  }
++
++  return response.json();
++}
+diff --git a/frontend/src/components/WaterfallCanvas.jsx b/frontend/src/components/WaterfallCanvas.jsx
+index 98fb668..3293b5b 100644
+--- a/frontend/src/components/WaterfallCanvas.jsx
++++ b/frontend/src/components/WaterfallCanvas.jsx
+@@ -30,7 +30,21 @@ const HIT_LINE_GLOW = "rgba(190, 120, 255, 0.12)";
+ 
+ 
+ const PIXELS_PER_SECOND = 140;
+-const NOTE_WIDTH = 22;
++const NOTE_WIDTH = 22; // legacy fallback
++
++function countWhiteKeys(lowestPitch, highestPitch) {
++  let count = 0;
++  for (let pitch = lowestPitch; pitch <= highestPitch; pitch += 1) {
++    if (!isBlackKeyPitch(pitch)) count += 1;
++  }
++  return Math.max(count, 1);
++}
++
++function noteBlockWidth(pitch, width, lowestPitch, highestPitch) {
++  const keyWidth = width / countWhiteKeys(lowestPitch, highestPitch);
++  const ratio = isBlackKeyPitch(pitch) ? 0.62 : 0.84;
++  return Math.min(56, Math.max(12, keyWidth * ratio));
++}
+ const NOTE_VISUAL_Y_OFFSET = 10;
+ const HIT_LINE_Y_RATIO = 0.985;
+ const RAW_MIN_NOTE_HEIGHT = 8;
+@@ -431,7 +445,11 @@ function drawPracticeConnector(ctx, previousNote, currentNote, width, hitLineY,
+   }
+ 
+   const palette = notePalette(currentNote, colors);
+-  const rectX = x - PRACTICE_CONNECTOR_WIDTH / 2;
++  const connectorWidth = Math.min(
++    PRACTICE_CONNECTOR_WIDTH * 2,
++    Math.max(5, noteBlockWidth(currentNote.pitch, width, lowestPitch, highestPitch) * 0.34)
++  );
++  const rectX = x - connectorWidth / 2;
+ 
+   ctx.save();
+ 
+@@ -446,7 +464,7 @@ function drawPracticeConnector(ctx, previousNote, currentNote, width, hitLineY,
+     ctx,
+     rectX,
+     connectorTop,
+-    PRACTICE_CONNECTOR_WIDTH,
++    connectorWidth,
+     connectorHeight,
+     999
+   );
+@@ -544,7 +562,7 @@ function drawNote(
+   const confidence =
+     level === "unknown" ? UNKNOWN_CONFIDENCE_STYLE : confidenceStyle[level];
+ 
+-  const rectW = NOTE_WIDTH;
++  const rectW = noteBlockWidth(note.pitch, width, lowestPitch, highestPitch);
+   const rectX = x - rectW / 2;
+   const rectY = y;
+   const rectH = h;
+diff --git a/frontend/src/lib/playability.js b/frontend/src/lib/playability.js
+index 89723f8..75ea99d 100644
+--- a/frontend/src/lib/playability.js
++++ b/frontend/src/lib/playability.js
+@@ -109,6 +109,43 @@ function noteStrength(note) {
+   return noteConfidence(note) * 0.6 + (noteVelocity(note) / 127) * 0.4;
+ }
+ 
++/*
++ * Skyline protection: the top right-hand voice (melody) and the bottom
++ * left-hand voice (bass) in every short window are structurally important.
++ * They are exempt from dust / confidence / density removal so aggressive
++ * cleaning can never eat the tune itself.
++ */
++function computeProtectedSkyline(notes, bucketSeconds = 0.3) {
++  const protectedIds = new Set();
++  const buckets = new Map();
++
++  for (const note of notes) {
++    const key = `${noteHand(note)}:${Math.floor(note.start / bucketSeconds)}`;
++    const current = buckets.get(key);
++
++    if (!current) {
++      buckets.set(key, note);
++      continue;
++    }
++
++    const hand = noteHand(note);
++    const better =
++      hand === "right"
++        ? note.pitch > current.pitch
++        : note.pitch < current.pitch;
++
++    if (better) buckets.set(key, note);
++  }
++
++  for (const note of buckets.values()) {
++    if (note.id !== undefined && note.id !== null) {
++      protectedIds.add(note.id);
++    }
++  }
++
++  return protectedIds;
++}
++
+ function normalizeNotes(notes) {
+   return notes
+     .map((note) => {
+@@ -351,7 +388,7 @@ function enforceMinimumDurations(notes, minDuration) {
+ /* Pass 2 – adaptive confidence floor                                 */
+ /* ---------------------------------------------------------------- */
+ 
+-function applyConfidenceFloor(notes, options) {
++function applyConfidenceFloor(notes, options, protectedIds = new Set()) {
+   const confidences = notes
+     .map((note) =>
+       note.confidence === null || note.confidence === undefined
+@@ -374,6 +411,10 @@ function applyConfidenceFloor(notes, options) {
+   );
+ 
+   return notes.filter((note) => {
++    if (protectedIds.has(note.id)) {
++      return true;
++    }
++
+     if (note.confidence === null || note.confidence === undefined) {
+       return true;
+     }
+@@ -397,12 +438,17 @@ function applyConfidenceFloor(notes, options) {
+ /* currently sounding notes can.                                      */
+ /* ---------------------------------------------------------------- */
+ 
+-function removeSustainedHarmonicGhosts(notes, options) {
++function removeSustainedHarmonicGhosts(notes, options, protectedIds = new Set()) {
+   const sorted = [...notes].sort((a, b) => a.start - b.start || a.pitch - b.pitch);
+   const kept = [];
+   const removed = new Set();
+ 
+   for (const note of sorted) {
++    if (protectedIds.has(note.id)) {
++      kept.push(note);
++      continue;
++    }
++
+     // Fundamentals currently sounding under this note's onset.
+     let isGhost = false;
+ 
+@@ -453,6 +499,7 @@ function applyDensityCap(notes, options) {
+   }
+ 
+   const dropped = new Set();
++  const skyline = computeProtectedSkyline(notes);
+ 
+   for (const [key, bucketNotes] of buckets) {
+     const hand = key.startsWith("left") ? "left" : "right";
+@@ -475,7 +522,9 @@ function applyDensityCap(notes, options) {
+       .sort((a, b) => noteStrength(b) - noteStrength(a));
+ 
+     for (const note of rest.slice(Math.max(limit - 1, 0))) {
+-      dropped.add(note);
++      if (!skyline.has(note.id)) {
++        dropped.add(note);
++      }
+     }
+   }
+ 
+@@ -557,9 +606,13 @@ export function buildPlayableNotes(notes = [], levelOrOptions = "practice") {
+   const options = base;
+ 
+   const normalized = normalizeNotes(notes);
+-  let working = normalized.filter((note) => !isDustNote(note, options));
+-  working = applyConfidenceFloor(working, options);
+-  working = removeSustainedHarmonicGhosts(working, options);
++  const protectedIds = computeProtectedSkyline(normalized);
++
++  let working = normalized.filter(
++    (note) => protectedIds.has(note.id) || !isDustNote(note, options)
++  );
++  working = applyConfidenceFloor(working, options, protectedIds);
++  working = removeSustainedHarmonicGhosts(working, options, protectedIds);
+ 
+   const clusters = clusterByOnset(working, options.onsetClusterWindowSeconds);
+   const clusteredResult = [];
+diff --git a/frontend/src/main.jsx b/frontend/src/main.jsx
+index 723c5df..389f4d7 100644
+--- a/frontend/src/main.jsx
++++ b/frontend/src/main.jsx
+@@ -22,6 +22,7 @@ import {
+   loadStoredUiThemeId,
+   loadStoredBlockPaletteId, buildSheetHand } from "./lib/themes";
+ import { attachComputerKeyboardPiano, createMidiInput } from "./lib/liveInputs";
++import { confidenceLevel } from "./lib/noteMapping";
+ import { demoNotes } from "./lib/demoNotes";
+ import {
+   DEFAULT_LESSON_JOB_ID,
+@@ -38,8 +39,7 @@ import {
+   titleFromFilename,
+   titleFromYouTubeUrl,
+   uploadAudioFile,
+-  uploadYoutubeAudio,
+-} from "./api/lessonApi";
++  uploadYoutubeAudio, saveLessonProgress, fetchProgressSummary, saveLessonPosition } from "./api/lessonApi";
+ 
+ const FALLBACK_DURATION_SECONDS = 4.2;
+ 
+@@ -127,6 +127,10 @@ const UI_COPY = {
+     "controls.notes": "Notes",
+     "controls.mic": "Mic",
+     "notes.beginner": "Beginner",
++    "controls.weak": "Weak notes",
++    "weak.show": "Show",
++    "weak.hide": "Hide",
++    "weak.hiddenCount": "hidden",
+     "notes.hintRaw": "Raw view shows the original transcription.",
+     "notes.hintPractice": "Practice: cleaned, playable arrangement",
+     "notes.hintBeginner": "Beginner: melody + simple bass only",
+@@ -261,6 +265,10 @@ const UI_COPY = {
+     "controls.notes": "Ноти",
+     "controls.mic": "Микрофон",
+     "notes.beginner": "Начинаещ",
++    "controls.weak": "Слаби ноти",
++    "weak.show": "Покажи",
++    "weak.hide": "Скрий",
++    "weak.hiddenCount": "скрити",
+     "notes.hintRaw": "Raw показва оригиналната транскрипция.",
+     "notes.hintPractice": "Practice: изчистен, реален за свирене аранжимент",
+     "notes.hintBeginner": "Начинаещ: само мелодия + прост бас",
+@@ -777,6 +785,21 @@ function App() {
+       return true;
+     }
+   });
++  const [hideLowConfidence, setHideLowConfidence] = useState(() => {
++    try {
++      return localStorage.getItem("daitune-hide-lowconf") === "1";
++    } catch {
++      return false;
++    }
++  });
++
++  useEffect(() => {
++    try {
++      localStorage.setItem("daitune-hide-lowconf", hideLowConfidence ? "1" : "0");
++    } catch {
++      /* ignore */
++    }
++  }, [hideLowConfidence]);
+   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+ 
+   // Practice tools
+@@ -793,6 +816,19 @@ function App() {
+     }
+   });
+   const [showResults, setShowResults] = useState(null);
++  const [progressSummaries, setProgressSummaries] = useState({});
++
++  const refreshProgressSummaries = React.useCallback(async () => {
++    try {
++      setProgressSummaries(await fetchProgressSummary());
++    } catch {
++      /* backend offline – badges just stay hidden */
++    }
++  }, []);
++
++  useEffect(() => {
++    refreshProgressSummaries();
++  }, [refreshProgressSummaries]);
+   const [midiStatus, setMidiStatus] = useState("off");
+ 
+   useEffect(() => {
+@@ -937,12 +973,29 @@ function App() {
+     return fitNotesToRange(playableLessonNotes, pianoRange.low, pianoRange.high);
+   }, [playableLessonNotes, fitToRange, pianoRange]);
+ 
+-  const visibleLessonNotes = React.useMemo(() => {
++  const confidenceFilteredNotes = React.useMemo(() => {
++    if (!hideLowConfidence) {
++      return rangedLessonNotes;
++    }
++
+     return rangedLessonNotes.filter((note) => {
++      if (note.confidence === null || note.confidence === undefined) {
++        return true; // unknown confidence is not "weak"
++      }
++
++      return confidenceLevel(note.confidence) !== "low";
++    });
++  }, [rangedLessonNotes, hideLowConfidence]);
++
++  const hiddenLowConfidenceCount =
++    rangedLessonNotes.length - confidenceFilteredNotes.length;
++
++  const visibleLessonNotes = React.useMemo(() => {
++    return confidenceFilteredNotes.filter((note) => {
+       if (activeHand === "both") return true;
+       return note.hand === activeHand;
+     });
+-  }, [rangedLessonNotes, activeHand]);
++  }, [confidenceFilteredNotes, activeHand]);
+ 
+   const noteViewHint =
+     noteViewMode === "raw"
+@@ -1180,6 +1233,13 @@ function App() {
+         resetPracticeScoring();
+         setIsPlaying(false);
+         setCurrentTime(0);
++
++        restoreLessonState(
++          currentLessonJobId,
++          Number(loadedLesson?.meta?.duration_seconds) ||
++            Number(loadedLesson?.duration_seconds) ||
++            9999
++        );
+       } catch (error) {
+         if (cancelled) return;
+ 
+@@ -1396,6 +1456,113 @@ function App() {
+   const screenModeRef = useRef(screenMode);
+   const countdownTokenRef = useRef(0);
+ 
++  /* Per-lesson session memory: position + player settings, local-first. */
++  const lessonStateKey = (jobId) => `daitune-lesson-state:${jobId}`;
++
++  const persistLessonState = React.useCallback(() => {
++    const jobId = currentLessonJobIdRef.current;
++    if (!jobId) return;
++
++    try {
++      localStorage.setItem(
++        lessonStateKey(jobId),
++        JSON.stringify({
++          t: musicalTimeRef.current,
++          tempo,
++          hand: activeHand,
++          view: noteViewMode,
++          hideWeak: hideLowConfidence,
++        })
++      );
++    } catch {
++      /* ignore */
++    }
++
++    saveLessonPosition(jobId, musicalTimeRef.current, noteViewMode).catch(() => {});
++  }, [tempo, activeHand, noteViewMode, hideLowConfidence]);
++
++  const persistLessonStateRef = useRef(persistLessonState);
++
++  useEffect(() => {
++    persistLessonStateRef.current = persistLessonState;
++  }, [persistLessonState]);
++
++  // Save settings whenever they change, and position every few seconds while playing.
++  useEffect(() => {
++    persistLessonStateRef.current();
++  }, [tempo, activeHand, noteViewMode, hideLowConfidence, persistLessonState]);
++
++  useEffect(() => {
++    if (!isPlaying) {
++      persistLessonStateRef.current();
++      return undefined;
++    }
++
++    const timer = setInterval(() => persistLessonStateRef.current(), 4000);
++    return () => clearInterval(timer);
++  }, [isPlaying]);
++
++  const restoreLessonState = React.useCallback((jobId, durationSeconds) => {
++    try {
++      const raw = localStorage.getItem(lessonStateKey(jobId));
++
++      if (!raw) {
++        const remote = progressSummariesRef.current[jobId];
++        const remoteT = Number(remote?.last_position_seconds);
++
++        if (remoteT > 2 && remoteT < durationSeconds - 2) {
++          setCurrentTime(remoteT);
++        }
++        if (["raw", "practice", "beginner"].includes(remote?.last_note_view)) {
++          setNoteViewMode(remote.last_note_view);
++        }
++        return;
++      }
++
++      const saved = JSON.parse(raw);
++
++      if (typeof saved.tempo === "number") setTempo(saved.tempo);
++      if (saved.hand === "left" || saved.hand === "right" || saved.hand === "both") {
++        setActiveHand(saved.hand);
++      }
++      if (["raw", "practice", "beginner"].includes(saved.view)) {
++        setNoteViewMode(saved.view);
++      }
++      if (typeof saved.hideWeak === "boolean") setHideLowConfidence(saved.hideWeak);
++
++      const safeTempo = typeof saved.tempo === "number" && saved.tempo > 0 ? saved.tempo : 1;
++      if (
++        typeof saved.t === "number" &&
++        saved.t > 2 &&
++        saved.t < durationSeconds - 2
++      ) {
++        setCurrentTime(saved.t / safeTempo);
++      }
++    } catch {
++      /* ignore */
++    }
++  }, []);
++  const currentLessonJobIdRef = useRef(null);
++  const noteViewModeRef = useRef("practice");
++  const refreshProgressSummariesRef = useRef(() => {});
++  const progressSummariesRef = useRef({});
++
++  useEffect(() => {
++    progressSummariesRef.current = progressSummaries;
++  }, [progressSummaries]);
++
++  useEffect(() => {
++    currentLessonJobIdRef.current = currentLessonJobId;
++  }, [currentLessonJobId]);
++
++  useEffect(() => {
++    noteViewModeRef.current = noteViewMode;
++  }, [noteViewMode]);
++
++  useEffect(() => {
++    refreshProgressSummariesRef.current = refreshProgressSummaries;
++  }, [refreshProgressSummaries]);
++
+   useEffect(() => {
+     playModeRef.current = playMode;
+   }, [playMode]);
+@@ -1653,6 +1820,28 @@ function App() {
+             const summary = buildResultsSummary();
+             if (summary) {
+               setShowResults(summary);
++
++              const jobId = currentLessonJobIdRef.current;
++              if (jobId) {
++                const payload = {
++                  job_id: jobId,
++                  hits: summary.hits,
++                  missed: summary.missed,
++                  wrong: summary.wrong,
++                  accuracy: summary.accuracy,
++                  stars: summary.stars,
++                  mode: playModeRef.current,
++                  note_view: noteViewModeRef.current,
++                  tempo,
++                  duration_seconds: lessonDurationSeconds,
++                };
++
++                setTimeout(() => {
++                  saveLessonProgress(payload)
++                    .then(() => refreshProgressSummariesRef.current())
++                    .catch(() => {});
++                }, 0);
++              }
+             }
+ 
+             return 0;
+@@ -2307,6 +2496,15 @@ return (
+                             {run.detected_key || "Unknown key"} · {run.note_count ?? 0} notes ·{" "}
+                             {run.transcription_method || "unknown"}
+                           </span>
++
++                          {progressSummaries[run.job_id] && (
++                            <span className="lesson-progress-badge">
++                              {"★".repeat(progressSummaries[run.job_id].best_stars || 0)}
++                              {"☆".repeat(3 - (progressSummaries[run.job_id].best_stars || 0))}
++                              {" "}
++                              {progressSummaries[run.job_id].best_accuracy}%
++                            </span>
++                          )}
+                         </div>
+ 
+                         <div className="session-item-actions">
+@@ -2694,6 +2892,16 @@ return (
+                       </span>
+ 
+                       <small>{run.transcription_method || "unknown"}</small>
++
++                      {progressSummaries[run.job_id] && (
++                        <span className="lesson-progress-badge">
++                          {"★".repeat(progressSummaries[run.job_id].best_stars || 0)}
++                          {"☆".repeat(3 - (progressSummaries[run.job_id].best_stars || 0))}
++                          {" "}
++                          {progressSummaries[run.job_id].best_accuracy}% ·{" "}
++                          {progressSummaries[run.job_id].attempts}×
++                        </span>
++                      )}
+                     </button>
+ 
+                     <button
+@@ -3117,6 +3325,34 @@ return (
+             </div>
+           </div>
+ 
++          <div className="mini-control-pill weak-pill" aria-label="Low-confidence notes">
++            <span className="mini-mode-label">{t("controls.weak")}</span>
++
++            <div className="mini-mode-switch">
++              <button
++                type="button"
++                className={!hideLowConfidence ? "active" : ""}
++                onClick={() => setHideLowConfidence(false)}
++              >
++                {t("weak.show")}
++              </button>
++
++              <button
++                type="button"
++                className={hideLowConfidence ? "active" : ""}
++                onClick={() => setHideLowConfidence(true)}
++              >
++                {t("weak.hide")}
++              </button>
++            </div>
++
++            {hideLowConfidence && hiddenLowConfidenceCount > 0 && (
++              <span className="weak-hidden-count">
++                {hiddenLowConfidenceCount} {t("weak.hiddenCount")}
++              </span>
++            )}
++          </div>
++
+           <div className="mini-control-pill mic-pill" aria-label="Live microphone practice">
+             <span className="mini-mode-label">{t("controls.mic")}</span>
+ 
+diff --git a/frontend/src/styles.css b/frontend/src/styles.css
+index d1b9e18..13fc2d8 100644
+--- a/frontend/src/styles.css
++++ b/frontend/src/styles.css
+@@ -7656,33 +7656,25 @@ body[data-theme="sunset"] {
+ }
+ 
+ body[data-theme="dark"] {
+-  background:
+-    radial-gradient(circle at 14% 12%, rgba(94, 100, 160, 0.16) 0%, transparent 34%),
+-    radial-gradient(circle at 86% 82%, rgba(140, 96, 180, 0.12) 0%, transparent 36%),
+-    linear-gradient(150deg, #07080f 0%, #0b0d18 55%, #0e1020 100%);
++  background-color: #0a0c16 !important;
++  background-image: radial-gradient(circle at 14% 12%, rgba(94, 100, 160, 0.16) 0%, transparent 34%), radial-gradient(circle at 86% 82%, rgba(140, 96, 180, 0.12) 0%, transparent 36%), linear-gradient(150deg, #07080f 0%, #0b0d18 55%, #0e1020 100%) !important;
+ }
+ 
+ body[data-theme="midnight"] {
+-  background:
+-    radial-gradient(circle at 12% 16%, rgba(56, 120, 220, 0.18) 0%, transparent 34%),
+-    radial-gradient(circle at 88% 80%, rgba(30, 80, 170, 0.16) 0%, transparent 36%),
+-    linear-gradient(150deg, #030a1c 0%, #06122c 55%, #0a1c3e 100%);
++  background-color: #06122c !important;
++  background-image: radial-gradient(circle at 12% 16%, rgba(56, 120, 220, 0.18) 0%, transparent 34%), radial-gradient(circle at 88% 80%, rgba(30, 80, 170, 0.16) 0%, transparent 36%), linear-gradient(150deg, #030a1c 0%, #06122c 55%, #0a1c3e 100%) !important;
+ }
+ 
+ body[data-theme="ocean"] {
+   --switch-active-bg: rgba(23, 190, 187, 0.9);
+-  background:
+-    radial-gradient(circle at 12% 16%, rgba(20, 180, 170, 0.16) 0%, transparent 34%),
+-    radial-gradient(circle at 88% 82%, rgba(250, 150, 80, 0.10) 0%, transparent 36%),
+-    linear-gradient(150deg, #03181e 0%, #05272f 55%, #073843 100%);
++  background-color: #05272f !important;
++  background-image: radial-gradient(circle at 12% 16%, rgba(20, 180, 170, 0.16) 0%, transparent 34%), radial-gradient(circle at 88% 82%, rgba(250, 150, 80, 0.10) 0%, transparent 36%), linear-gradient(150deg, #03181e 0%, #05272f 55%, #073843 100%) !important;
+ }
+ 
+ body[data-theme="sunset"] {
+   --switch-active-bg: rgba(240, 110, 130, 0.92);
+-  background:
+-    radial-gradient(circle at 12% 14%, rgba(250, 140, 90, 0.16) 0%, transparent 34%),
+-    radial-gradient(circle at 88% 84%, rgba(200, 60, 130, 0.16) 0%, transparent 36%),
+-    linear-gradient(150deg, #170722 0%, #2a0d33 55%, #431540 100%);
++  background-color: #2a0d33 !important;
++  background-image: radial-gradient(circle at 12% 14%, rgba(250, 140, 90, 0.16) 0%, transparent 34%), radial-gradient(circle at 88% 84%, rgba(200, 60, 130, 0.16) 0%, transparent 36%), linear-gradient(150deg, #170722 0%, #2a0d33 55%, #431540 100%) !important;
+ }
+ 
+ body[data-theme="light"] {
+@@ -7697,9 +7689,8 @@ body[data-theme="light"] {
+   --switch-active-bg: #4f5fe0;
+   --switch-active-text: #ffffff;
+   --shadow-card: 0 14px 32px rgba(70, 84, 160, 0.14);
+-  background:
+-    radial-gradient(circle at 16% 14%, rgba(120, 150, 250, 0.14) 0%, transparent 32%),
+-    linear-gradient(150deg, #f4f7ff 0%, #eef1fb 60%, #e9ecf9 100%);
++  background-color: #eef1fb !important;
++  background-image: radial-gradient(circle at 16% 14%, rgba(120, 150, 250, 0.14) 0%, transparent 32%), linear-gradient(150deg, #f4f7ff 0%, #eef1fb 60%, #e9ecf9 100%) !important;
+ }
+ 
+ /* --- Themed surfaces: every rule reads only the variables --- */
+@@ -8123,26 +8114,135 @@ body[data-theme] .black-key.active-right {
+   color: #18a06e;
+ }
+ 
+-/* ===== GENERATED THEME OVERRIDES (from stylesheet audit) ===== */
++/* Manual finishing touches for full-theme coverage */
++
++body[data-theme]:not([data-theme="daitune"]) .app-shell {
++  color: var(--text-primary);
++}
++
++body[data-theme]:not([data-theme="daitune"]) .lesson-stage {
++  background: transparent;
++}
++
++body[data-theme]:not([data-theme="daitune"]) .eyebrow,
++body[data-theme]:not([data-theme="daitune"]) .lesson-ai-summary span,
++body[data-theme]:not([data-theme="daitune"]) .mini-mode-label,
++body[data-theme]:not([data-theme="daitune"]) .drawer-nav-copy small,
++body[data-theme]:not([data-theme="daitune"]) .home-brand-block span,
++body[data-theme]:not([data-theme="daitune"]) .home-section-header span {
++  color: var(--text-secondary);
++}
++
++body[data-theme]:not([data-theme="daitune"]) .mini-mode-switch button.active,
++body[data-theme]:not([data-theme="daitune"]) .mode-switch button.active,
++body[data-theme]:not([data-theme="daitune"]) .view-switch button.active,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-source-tabs button.active,
++body[data-theme]:not([data-theme="daitune"]) .hands-toggle-button.is-active,
++body[data-theme]:not([data-theme="daitune"]) .display-chip.is-active {
++  background: var(--switch-active-bg);
++  color: var(--switch-active-text);
++}
++
++body[data-theme]:not([data-theme="daitune"]) select,
++body[data-theme]:not([data-theme="daitune"]) textarea,
++body[data-theme]:not([data-theme="daitune"]) input {
++  background: var(--surface-input);
++  border-color: var(--surface-border);
++  color: var(--text-primary);
++}
++
++body[data-theme]:not([data-theme="daitune"]) input::placeholder,
++body[data-theme]:not([data-theme="daitune"]) textarea::placeholder {
++  color: var(--text-muted);
++}
++
++body[data-theme]:not([data-theme="daitune"]) ::-webkit-scrollbar {
++  width: 10px;
++  height: 10px;
++}
++
++body[data-theme]:not([data-theme="daitune"]) ::-webkit-scrollbar-thumb {
++  background: var(--surface-border);
++  border-radius: 999px;
++}
++
++body[data-theme]:not([data-theme="daitune"]) ::-webkit-scrollbar-track {
++  background: transparent;
++}
++
++/* ===== Piano range settings controls ===== */
++
++.piano-range-presets {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 6px;
++}
++
++.piano-preset-chip {
++  padding: 6px 11px;
++  border-radius: 999px;
++  border: 1.4px solid var(--surface-border, rgba(179, 166, 228, 0.42));
++  background: var(--surface-soft, rgba(255, 255, 255, 0.5));
++  color: var(--text-secondary);
++  font-weight: 800;
++  font-size: 12.5px;
++  cursor: pointer;
++}
++
++.piano-preset-chip.active {
++  background: var(--switch-active-bg, #7a6ef0);
++  border-color: var(--switch-active-bg, #7a6ef0);
++  color: var(--switch-active-text, #fff);
++}
++
++.piano-range-selects {
++  display: flex;
++  align-items: flex-end;
++  gap: 10px;
++}
++
++.piano-range-selects label {
++  display: flex;
++  flex-direction: column;
++  gap: 4px;
++  font-size: 11.5px;
++  font-weight: 700;
++  color: var(--text-muted);
++}
++
++.piano-range-selects select {
++  padding: 6px 8px;
++  border-radius: 10px;
++  border: 1px solid var(--surface-border, rgba(179, 166, 228, 0.42));
++  background: var(--surface-input, rgba(255, 255, 255, 0.7));
++  color: var(--text-primary);
++  font-weight: 700;
++}
++
++.piano-range-count {
++  margin-left: auto;
++  font-size: 12px;
++  font-weight: 800;
++  color: var(--text-secondary);
++  padding-bottom: 8px;
++}
++
++/* ===== GENERATED THEME OVERRIDES v2 (luminance audit, !important) ===== */
+ 
+ body[data-theme]:not([data-theme="daitune"]) .back-button,
+ body[data-theme]:not([data-theme="daitune"]) .compact-confidence-pill,
++body[data-theme]:not([data-theme="daitune"]) .compact-confidence-sample,
+ body[data-theme]:not([data-theme="daitune"]) .compact-select-control select,
+ body[data-theme]:not([data-theme="daitune"]) .compact-select-group,
+ body[data-theme]:not([data-theme="daitune"]) .compact-time-pill,
+ body[data-theme]:not([data-theme="daitune"]) .confidence-badge,
+ body[data-theme]:not([data-theme="daitune"]) .confidence-block-indicator,
+ body[data-theme]:not([data-theme="daitune"]) .confidence-dot,
+-body[data-theme]:not([data-theme="daitune"]) .confidence-icon,
+ body[data-theme]:not([data-theme="daitune"]) .confidence-legend,
+-body[data-theme]:not([data-theme="daitune"]) .confidence-ring,
+ body[data-theme]:not([data-theme="daitune"]) .control-button,
++body[data-theme]:not([data-theme="daitune"]) .control-button--primary,
+ body[data-theme]:not([data-theme="daitune"]) .display-chip,
+ body[data-theme]:not([data-theme="daitune"]) .display-chip.is-active,
+-body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button,
+-body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button-accent,
+-body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button-accent .drawer-nav-icon,
+-body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button:hover,
+ body[data-theme]:not([data-theme="daitune"]) .drawer-nav-icon,
+ body[data-theme]:not([data-theme="daitune"]) .hand-image-button,
+ body[data-theme]:not([data-theme="daitune"]) .hand-image-button.is-active,
+@@ -8151,22 +8251,27 @@ body[data-theme]:not([data-theme="daitune"]) .hand-toggle-left:hover,
+ body[data-theme]:not([data-theme="daitune"]) .hand-toggle-right:focus-visible,
+ body[data-theme]:not([data-theme="daitune"]) .hand-toggle-right:hover,
+ body[data-theme]:not([data-theme="daitune"]) .hands-control-card,
++body[data-theme]:not([data-theme="daitune"]) .hands-divider,
+ body[data-theme]:not([data-theme="daitune"]) .hands-toggle,
+ body[data-theme]:not([data-theme="daitune"]) .hands-toggle-button,
+ body[data-theme]:not([data-theme="daitune"]) .hands-toggle-button.is-active,
+ body[data-theme]:not([data-theme="daitune"]) .hands-toggle-row,
+ body[data-theme]:not([data-theme="daitune"]) .home-lesson-delete-button,
+ body[data-theme]:not([data-theme="daitune"]) .home-lesson-delete-button:hover,
++body[data-theme]:not([data-theme="daitune"]) .home-lesson-thumbnail span,
+ body[data-theme]:not([data-theme="daitune"]) .home-logo-slot,
+ body[data-theme]:not([data-theme="daitune"]) .home-upload-button,
+ body[data-theme]:not([data-theme="daitune"]) .home-youtube-row,
+ body[data-theme]:not([data-theme="daitune"]) .language-toggle-button,
++body[data-theme]:not([data-theme="daitune"]) .left-dot,
+ body[data-theme]:not([data-theme="daitune"]) .legend-confidence,
+ body[data-theme]:not([data-theme="daitune"]) .legend-item,
+ body[data-theme]:not([data-theme="daitune"]) .legend-pill,
+ body[data-theme]:not([data-theme="daitune"]) .lesson-action-button,
+ body[data-theme]:not([data-theme="daitune"]) .lesson-action-button:hover,
+ body[data-theme]:not([data-theme="daitune"]) .lesson-ai-summary span,
++body[data-theme]:not([data-theme="daitune"]) .lesson-bottom-bar,
++body[data-theme]:not([data-theme="daitune"]) .lesson-player-toggle,
+ body[data-theme]:not([data-theme="daitune"]) .library-button,
+ body[data-theme]:not([data-theme="daitune"]) .library-button:hover,
+ body[data-theme]:not([data-theme="daitune"]) .menu-button,
+@@ -8183,6 +8288,8 @@ body[data-theme]:not([data-theme="daitune"]) .mode-switch button.active,
+ body[data-theme]:not([data-theme="daitune"]) .new-lesson-field input,
+ body[data-theme]:not([data-theme="daitune"]) .new-lesson-source-tabs,
+ body[data-theme]:not([data-theme="daitune"]) .new-lesson-source-tabs button.active,
++body[data-theme]:not([data-theme="daitune"]) .piano-preset-chip,
++body[data-theme]:not([data-theme="daitune"]) .piano-range-selects select,
+ body[data-theme]:not([data-theme="daitune"]) .premium-controls,
+ body[data-theme]:not([data-theme="daitune"]) .preprocess-expand-button,
+ body[data-theme]:not([data-theme="daitune"]) .preprocess-toggle-row,
+@@ -8190,6 +8297,7 @@ body[data-theme]:not([data-theme="daitune"]) .primary-control,
+ body[data-theme]:not([data-theme="daitune"]) .progress-fill,
+ body[data-theme]:not([data-theme="daitune"]) .progress-pill,
+ body[data-theme]:not([data-theme="daitune"]) .progress-pill::before,
++body[data-theme]:not([data-theme="daitune"]) .right-dot,
+ body[data-theme]:not([data-theme="daitune"]) .secondary,
+ body[data-theme]:not([data-theme="daitune"]) .session-item-delete-button,
+ body[data-theme]:not([data-theme="daitune"]) .session-item-delete-button:hover,
+@@ -8205,6 +8313,9 @@ body[data-theme]:not([data-theme="daitune"]) .sessions-popover,
+ body[data-theme]:not([data-theme="daitune"]) .sessions-rename-button,
+ body[data-theme]:not([data-theme="daitune"]) .sheet-caption,
+ body[data-theme]:not([data-theme="daitune"]) .sheet-card,
++body[data-theme]:not([data-theme="daitune"]) .sheet-playhead,
++body[data-theme]:not([data-theme="daitune"]) .sheet-playhead::after,
++body[data-theme]:not([data-theme="daitune"]) .sheet-playhead::before,
+ body[data-theme]:not([data-theme="daitune"]) .status-pill,
+ body[data-theme]:not([data-theme="daitune"]) .title-edit-button,
+ body[data-theme]:not([data-theme="daitune"]) .view-icon-mix::after,
+@@ -8219,6 +8330,8 @@ body[data-theme]:not([data-theme="daitune"]) /* 2) Low confidence секцият
+ body[data-theme]:not([data-theme="daitune"]) /* 3) самото пунктирно "block" */
+ .confidence-block-indicator,
+ body[data-theme]:not([data-theme="daitune"]) /* Back button: centered,
++body[data-theme]:not([data-theme="daitune"]) /* Blocks icon: falling bars */
++.view-icon-blocks::before,
+ body[data-theme]:not([data-theme="daitune"]) /* Display block: taller and aligned with Hands */
+ .mode-switch,
+ body[data-theme]:not([data-theme="daitune"]) /* Low confidence chip */
+@@ -8226,8 +8339,6 @@ body[data-theme]:not([data-theme="daitune"]) /* Low confidence chip */
+ body[data-theme]:not([data-theme="daitune"]) /* Optional purple active state,
+ body[data-theme]:not([data-theme="daitune"]) /* Progress pill with star icon */
+ .progress-pill,
+-body[data-theme]:not([data-theme="daitune"]) /* Settings button */
+-.settings-button,
+ body[data-theme]:not([data-theme="daitune"]) /* Tempo block: make it feel like a real section */
+ .tempo-control,
+ body[data-theme]:not([data-theme="daitune"]) /* Tiny illustrative icons inside view buttons */
+@@ -8240,8 +8351,8 @@ body[data-theme]:not([data-theme="daitune"]) but clearer separated buttons */
+ body[data-theme]:not([data-theme="daitune"]) button,
+ body[data-theme]:not([data-theme="daitune"]) same visual language */
+ .back-button {
+-  background: var(--surface-soft);
+-  border-color: var(--surface-border);
++  background: var(--surface-soft) !important;
++  border-color: var(--surface-border) !important;
+ }
+ 
+ body[data-theme]:not([data-theme="daitune"]) .compact-option-panel,
+@@ -8250,6 +8361,10 @@ body[data-theme]:not([data-theme="daitune"]) .drawer-action-button-primary,
+ body[data-theme]:not([data-theme="daitune"]) .drawer-home-button,
+ body[data-theme]:not([data-theme="daitune"]) .drawer-home-button:hover,
+ body[data-theme]:not([data-theme="daitune"]) .drawer-logo-slot,
++body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button,
++body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button-accent,
++body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button-accent .drawer-nav-icon,
++body[data-theme]:not([data-theme="daitune"]) .drawer-nav-button:hover,
+ body[data-theme]:not([data-theme="daitune"]) .drawer-section-title-icon,
+ body[data-theme]:not([data-theme="daitune"]) .drawer-settings-list,
+ body[data-theme]:not([data-theme="daitune"]) .home-app-header,
+@@ -8259,18 +8374,27 @@ body[data-theme]:not([data-theme="daitune"]) .lesson-player-bar,
+ body[data-theme]:not([data-theme="daitune"]) .lesson-stage,
+ body[data-theme]:not([data-theme="daitune"]) .new-lesson-modal,
+ body[data-theme]:not([data-theme="daitune"]) .new-lesson-preprocess-panel,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-processing-panel,
+ body[data-theme]:not([data-theme="daitune"]) .new-lesson-source-panel,
+ body[data-theme]:not([data-theme="daitune"]) .sessions-drawer,
+ body[data-theme]:not([data-theme="daitune"]) .settings-panel,
+ body[data-theme]:not([data-theme="daitune"]) .top-player-bar,
++body[data-theme]:not([data-theme="daitune"]) /* =========================================================
++   UNIFIED BOTTOM CONTROL BAR
++   One large outlined section with aligned controls
++   ========================================================= */
++
++.controls-card,
+ body[data-theme]:not([data-theme="daitune"]) /* ============================================================= */
+ /* ==================  Settings panel  ========================= */
+ /* ============================================================= */
+ 
+-.settings-gear-button {
+-  background: var(--surface-card);
+-  border-color: var(--surface-border);
+-  box-shadow: var(--shadow-card);
++.settings-gear-button,
++body[data-theme]:not([data-theme="daitune"]) /* Settings button */
++.settings-button {
++  background: var(--surface-card) !important;
++  border-color: var(--surface-border) !important;
++  box-shadow: var(--shadow-card) !important;
+ }
+ 
+ body[data-theme]:not([data-theme="daitune"]) .back-arrow-icon,
+@@ -8301,9 +8425,9 @@ body[data-theme]:not([data-theme="daitune"]) .drawer-section-header strong,
+ body[data-theme]:not([data-theme="daitune"]) .drawer-section-title-icon,
+ body[data-theme]:not([data-theme="daitune"]) .drawer-settings-list span,
+ body[data-theme]:not([data-theme="daitune"]) .eyebrow,
+-body[data-theme]:not([data-theme="daitune"]) .hand-illustration.left,
+ body[data-theme]:not([data-theme="daitune"]) .hand-toggle,
+ body[data-theme]:not([data-theme="daitune"]) .hand-toggle-left,
++body[data-theme]:not([data-theme="daitune"]) .hand-toggle-right,
+ body[data-theme]:not([data-theme="daitune"]) .hands-control,
+ body[data-theme]:not([data-theme="daitune"]) .hands-control-title,
+ body[data-theme]:not([data-theme="daitune"]) .hands-label,
+@@ -8316,11 +8440,11 @@ body[data-theme]:not([data-theme="daitune"]) .home-lesson-card,
+ body[data-theme]:not([data-theme="daitune"]) .home-lesson-card small,
+ body[data-theme]:not([data-theme="daitune"]) .home-lesson-card span,
+ body[data-theme]:not([data-theme="daitune"]) .home-lesson-card strong,
++body[data-theme]:not([data-theme="daitune"]) .home-lesson-delete-button,
+ body[data-theme]:not([data-theme="daitune"]) .home-section-header h2,
+ body[data-theme]:not([data-theme="daitune"]) .home-section-header span,
+ body[data-theme]:not([data-theme="daitune"]) .home-upload-button,
+ body[data-theme]:not([data-theme="daitune"]) .home-youtube-row input,
+-body[data-theme]:not([data-theme="daitune"]) .home-youtube-row input::placeholder,
+ body[data-theme]:not([data-theme="daitune"]) .language-toggle-button,
+ body[data-theme]:not([data-theme="daitune"]) .legend,
+ body[data-theme]:not([data-theme="daitune"]) .legend-pill,
+@@ -8344,6 +8468,7 @@ body[data-theme]:not([data-theme="daitune"]) .mode-switch > span,
+ body[data-theme]:not([data-theme="daitune"]) .mode-switch button,
+ body[data-theme]:not([data-theme="daitune"]) .mode-switch button.active,
+ body[data-theme]:not([data-theme="daitune"]) .mode-switch span,
++body[data-theme]:not([data-theme="daitune"]) .new-lesson-error,
+ body[data-theme]:not([data-theme="daitune"]) .new-lesson-field,
+ body[data-theme]:not([data-theme="daitune"]) .new-lesson-field input,
+ body[data-theme]:not([data-theme="daitune"]) .new-lesson-field-hint,
+@@ -8361,6 +8486,8 @@ body[data-theme]:not([data-theme="daitune"]) .preprocess-toggle-row small,
+ body[data-theme]:not([data-theme="daitune"]) .preprocess-toggle-row strong,
+ body[data-theme]:not([data-theme="daitune"]) .progress-pill,
+ body[data-theme]:not([data-theme="daitune"]) .progress-pill::before,
++body[data-theme]:not([data-theme="daitune"]) .session-item-delete-button,
++body[data-theme]:not([data-theme="daitune"]) .session-item-delete-button:hover,
+ body[data-theme]:not([data-theme="daitune"]) .session-item-edit-button,
+ body[data-theme]:not([data-theme="daitune"]) .session-item-edit-button:hover,
+ body[data-theme]:not([data-theme="daitune"]) .session-list-item,
+@@ -8377,7 +8504,12 @@ body[data-theme]:not([data-theme="daitune"]) .sessions-popover-header,
+ body[data-theme]:not([data-theme="daitune"]) .sessions-popover-header span,
+ body[data-theme]:not([data-theme="daitune"]) .sessions-rename-button,
+ body[data-theme]:not([data-theme="daitune"]) .sheet-caption,
++body[data-theme]:not([data-theme="daitune"]) .sheet-clef,
++body[data-theme]:not([data-theme="daitune"]) .sheet-fingering,
++body[data-theme]:not([data-theme="daitune"]) .sheet-header-row,
++body[data-theme]:not([data-theme="daitune"]) .sheet-note,
+ body[data-theme]:not([data-theme="daitune"]) .sheet-note.is-active,
++body[data-theme]:not([data-theme="daitune"]) .sheet-time-signature,
+ body[data-theme]:not([data-theme="daitune"]) .source-separation-toggle small,
+ body[data-theme]:not([data-theme="daitune"]) .source-separation-toggle strong,
+ body[data-theme]:not([data-theme="daitune"]) .status-pill,
+@@ -8411,18 +8543,16 @@ body[data-theme]:not([data-theme="daitune"]) premium segmented control
+    ========================================================= */
+ 
+ .hands-control {
+-  color: var(--text-primary);
++  color: var(--text-primary) !important;
+ }
+ 
+ 
+-/* Manual finishing touches for full-theme coverage */
+-
+-body[data-theme]:not([data-theme="daitune"]) .app-shell {
+-  color: var(--text-primary);
+-}
+-
++/* v2 manual: shells and stage never paint their own light gradients */
++body[data-theme]:not([data-theme="daitune"]) .premium-shell,
++body[data-theme]:not([data-theme="daitune"]) .home-screen,
++body[data-theme]:not([data-theme="daitune"]) .app-shell,
+ body[data-theme]:not([data-theme="daitune"]) .lesson-stage {
+-  background: transparent;
++  background: transparent !important;
+ }
+ 
+ body[data-theme]:not([data-theme="daitune"]) .eyebrow,
+@@ -8430,8 +8560,9 @@ body[data-theme]:not([data-theme="daitune"]) .lesson-ai-summary span,
+ body[data-theme]:not([data-theme="daitune"]) .mini-mode-label,
+ body[data-theme]:not([data-theme="daitune"]) .drawer-nav-copy small,
+ body[data-theme]:not([data-theme="daitune"]) .home-brand-block span,
+-body[data-theme]:not([data-theme="daitune"]) .home-section-header span {
+-  color: var(--text-secondary);
++body[data-theme]:not([data-theme="daitune"]) .home-section-header span,
++body[data-theme]:not([data-theme="daitune"]) .settings-section-label {
++  color: var(--text-secondary) !important;
+ }
+ 
+ body[data-theme]:not([data-theme="daitune"]) .mini-mode-switch button.active,
+@@ -8439,91 +8570,44 @@ body[data-theme]:not([data-theme="daitune"]) .mode-switch button.active,
+ body[data-theme]:not([data-theme="daitune"]) .view-switch button.active,
+ body[data-theme]:not([data-theme="daitune"]) .new-lesson-source-tabs button.active,
+ body[data-theme]:not([data-theme="daitune"]) .hands-toggle-button.is-active,
+-body[data-theme]:not([data-theme="daitune"]) .display-chip.is-active {
+-  background: var(--switch-active-bg);
+-  color: var(--switch-active-text);
+-}
+-
+-body[data-theme]:not([data-theme="daitune"]) select,
+-body[data-theme]:not([data-theme="daitune"]) textarea,
+-body[data-theme]:not([data-theme="daitune"]) input {
+-  background: var(--surface-input);
+-  border-color: var(--surface-border);
+-  color: var(--text-primary);
+-}
+-
+-body[data-theme]:not([data-theme="daitune"]) input::placeholder,
+-body[data-theme]:not([data-theme="daitune"]) textarea::placeholder {
+-  color: var(--text-muted);
+-}
+-
+-body[data-theme]:not([data-theme="daitune"]) ::-webkit-scrollbar {
+-  width: 10px;
+-  height: 10px;
+-}
+-
+-body[data-theme]:not([data-theme="daitune"]) ::-webkit-scrollbar-thumb {
+-  background: var(--surface-border);
+-  border-radius: 999px;
++body[data-theme]:not([data-theme="daitune"]) .display-chip.is-active,
++body[data-theme]:not([data-theme="daitune"]) .theme-swatch.active,
++body[data-theme]:not([data-theme="daitune"]) .piano-preset-chip.active {
++  background: var(--switch-active-bg) !important;
++  color: var(--switch-active-text) !important;
+ }
+ 
+-body[data-theme]:not([data-theme="daitune"]) ::-webkit-scrollbar-track {
+-  background: transparent;
++/* ===== Waterfall ↔ keyboard alignment: identical horizontal insets ===== */
++.piano-keyboard {
++  padding-left: 0 !important;
++  padding-right: 0 !important;
+ }
+ 
+-/* ===== Piano range settings controls ===== */
+-
+-.piano-range-presets {
+-  display: flex;
+-  flex-wrap: wrap;
+-  gap: 6px;
++.waterfall-frame {
++  margin-left: 0 !important;
++  margin-right: 0 !important;
++  padding-left: 0 !important;
++  padding-right: 0 !important;
+ }
+ 
+-.piano-preset-chip {
+-  padding: 6px 11px;
+-  border-radius: 999px;
+-  border: 1.4px solid var(--surface-border, rgba(179, 166, 228, 0.42));
+-  background: var(--surface-soft, rgba(255, 255, 255, 0.5));
+-  color: var(--text-secondary);
++.weak-pill .weak-hidden-count {
++  margin-left: 8px;
++  font-size: 12px;
+   font-weight: 800;
+-  font-size: 12.5px;
+-  cursor: pointer;
+-}
+-
+-.piano-preset-chip.active {
+-  background: var(--switch-active-bg, #7a6ef0);
+-  border-color: var(--switch-active-bg, #7a6ef0);
+-  color: var(--switch-active-text, #fff);
+-}
+-
+-.piano-range-selects {
+-  display: flex;
+-  align-items: flex-end;
+-  gap: 10px;
++  color: var(--text-secondary);
+ }
+ 
+-.piano-range-selects label {
+-  display: flex;
+-  flex-direction: column;
+-  gap: 4px;
++.lesson-progress-badge {
++  display: inline-flex;
++  align-items: center;
++  gap: 5px;
++  margin-top: 4px;
+   font-size: 11.5px;
+-  font-weight: 700;
+-  color: var(--text-muted);
+-}
+-
+-.piano-range-selects select {
+-  padding: 6px 8px;
+-  border-radius: 10px;
+-  border: 1px solid var(--surface-border, rgba(179, 166, 228, 0.42));
+-  background: var(--surface-input, rgba(255, 255, 255, 0.7));
+-  color: var(--text-primary);
+-  font-weight: 700;
++  font-weight: 800;
++  color: #d9a916;
++  letter-spacing: 0.04em;
+ }
+ 
+-.piano-range-count {
+-  margin-left: auto;
+-  font-size: 12px;
+-  font-weight: 800;
+-  color: var(--text-secondary);
+-  padding-bottom: 8px;
++body[data-theme]:not([data-theme="daitune"]) .lesson-progress-badge {
++  color: #f2c94c !important;
+ }
