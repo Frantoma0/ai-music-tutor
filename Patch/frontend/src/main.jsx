@@ -22,6 +22,7 @@ import {
   loadStoredUiThemeId,
   loadStoredBlockPaletteId, buildSheetHand } from "./lib/themes";
 import { attachComputerKeyboardPiano, createMidiInput } from "./lib/liveInputs";
+import { confidenceLevel } from "./lib/noteMapping";
 import { demoNotes } from "./lib/demoNotes";
 import {
   DEFAULT_LESSON_JOB_ID,
@@ -38,8 +39,7 @@ import {
   titleFromFilename,
   titleFromYouTubeUrl,
   uploadAudioFile,
-  uploadYoutubeAudio,
-} from "./api/lessonApi";
+  uploadYoutubeAudio, saveLessonProgress, fetchProgressSummary, saveLessonPosition } from "./api/lessonApi";
 
 const FALLBACK_DURATION_SECONDS = 4.2;
 
@@ -127,6 +127,10 @@ const UI_COPY = {
     "controls.notes": "Notes",
     "controls.mic": "Mic",
     "notes.beginner": "Beginner",
+    "controls.weak": "Weak notes",
+    "weak.show": "Show",
+    "weak.hide": "Hide",
+    "weak.hiddenCount": "hidden",
     "notes.hintRaw": "Raw view shows the original transcription.",
     "notes.hintPractice": "Practice: cleaned, playable arrangement",
     "notes.hintBeginner": "Beginner: melody + simple bass only",
@@ -261,6 +265,10 @@ const UI_COPY = {
     "controls.notes": "Ноти",
     "controls.mic": "Микрофон",
     "notes.beginner": "Начинаещ",
+    "controls.weak": "Слаби ноти",
+    "weak.show": "Покажи",
+    "weak.hide": "Скрий",
+    "weak.hiddenCount": "скрити",
     "notes.hintRaw": "Raw показва оригиналната транскрипция.",
     "notes.hintPractice": "Practice: изчистен, реален за свирене аранжимент",
     "notes.hintBeginner": "Начинаещ: само мелодия + прост бас",
@@ -777,6 +785,21 @@ function App() {
       return true;
     }
   });
+  const [hideLowConfidence, setHideLowConfidence] = useState(() => {
+    try {
+      return localStorage.getItem("daitune-hide-lowconf") === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("daitune-hide-lowconf", hideLowConfidence ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [hideLowConfidence]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Practice tools
@@ -793,6 +816,19 @@ function App() {
     }
   });
   const [showResults, setShowResults] = useState(null);
+  const [progressSummaries, setProgressSummaries] = useState({});
+
+  const refreshProgressSummaries = React.useCallback(async () => {
+    try {
+      setProgressSummaries(await fetchProgressSummary());
+    } catch {
+      /* backend offline – badges just stay hidden */
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshProgressSummaries();
+  }, [refreshProgressSummaries]);
   const [midiStatus, setMidiStatus] = useState("off");
 
   useEffect(() => {
@@ -937,12 +973,29 @@ function App() {
     return fitNotesToRange(playableLessonNotes, pianoRange.low, pianoRange.high);
   }, [playableLessonNotes, fitToRange, pianoRange]);
 
-  const visibleLessonNotes = React.useMemo(() => {
+  const confidenceFilteredNotes = React.useMemo(() => {
+    if (!hideLowConfidence) {
+      return rangedLessonNotes;
+    }
+
     return rangedLessonNotes.filter((note) => {
+      if (note.confidence === null || note.confidence === undefined) {
+        return true; // unknown confidence is not "weak"
+      }
+
+      return confidenceLevel(note.confidence) !== "low";
+    });
+  }, [rangedLessonNotes, hideLowConfidence]);
+
+  const hiddenLowConfidenceCount =
+    rangedLessonNotes.length - confidenceFilteredNotes.length;
+
+  const visibleLessonNotes = React.useMemo(() => {
+    return confidenceFilteredNotes.filter((note) => {
       if (activeHand === "both") return true;
       return note.hand === activeHand;
     });
-  }, [rangedLessonNotes, activeHand]);
+  }, [confidenceFilteredNotes, activeHand]);
 
   const noteViewHint =
     noteViewMode === "raw"
@@ -1180,6 +1233,13 @@ function App() {
         resetPracticeScoring();
         setIsPlaying(false);
         setCurrentTime(0);
+
+        restoreLessonState(
+          currentLessonJobId,
+          Number(loadedLesson?.meta?.duration_seconds) ||
+            Number(loadedLesson?.duration_seconds) ||
+            9999
+        );
       } catch (error) {
         if (cancelled) return;
 
@@ -1395,6 +1455,113 @@ function App() {
   const wrongCountRef = useRef(0);
   const screenModeRef = useRef(screenMode);
   const countdownTokenRef = useRef(0);
+
+  /* Per-lesson session memory: position + player settings, local-first. */
+  const lessonStateKey = (jobId) => `daitune-lesson-state:${jobId}`;
+
+  const persistLessonState = React.useCallback(() => {
+    const jobId = currentLessonJobIdRef.current;
+    if (!jobId) return;
+
+    try {
+      localStorage.setItem(
+        lessonStateKey(jobId),
+        JSON.stringify({
+          t: musicalTimeRef.current,
+          tempo,
+          hand: activeHand,
+          view: noteViewMode,
+          hideWeak: hideLowConfidence,
+        })
+      );
+    } catch {
+      /* ignore */
+    }
+
+    saveLessonPosition(jobId, musicalTimeRef.current, noteViewMode).catch(() => {});
+  }, [tempo, activeHand, noteViewMode, hideLowConfidence]);
+
+  const persistLessonStateRef = useRef(persistLessonState);
+
+  useEffect(() => {
+    persistLessonStateRef.current = persistLessonState;
+  }, [persistLessonState]);
+
+  // Save settings whenever they change, and position every few seconds while playing.
+  useEffect(() => {
+    persistLessonStateRef.current();
+  }, [tempo, activeHand, noteViewMode, hideLowConfidence, persistLessonState]);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      persistLessonStateRef.current();
+      return undefined;
+    }
+
+    const timer = setInterval(() => persistLessonStateRef.current(), 4000);
+    return () => clearInterval(timer);
+  }, [isPlaying]);
+
+  const restoreLessonState = React.useCallback((jobId, durationSeconds) => {
+    try {
+      const raw = localStorage.getItem(lessonStateKey(jobId));
+
+      if (!raw) {
+        const remote = progressSummariesRef.current[jobId];
+        const remoteT = Number(remote?.last_position_seconds);
+
+        if (remoteT > 2 && remoteT < durationSeconds - 2) {
+          setCurrentTime(remoteT);
+        }
+        if (["raw", "practice", "beginner"].includes(remote?.last_note_view)) {
+          setNoteViewMode(remote.last_note_view);
+        }
+        return;
+      }
+
+      const saved = JSON.parse(raw);
+
+      if (typeof saved.tempo === "number") setTempo(saved.tempo);
+      if (saved.hand === "left" || saved.hand === "right" || saved.hand === "both") {
+        setActiveHand(saved.hand);
+      }
+      if (["raw", "practice", "beginner"].includes(saved.view)) {
+        setNoteViewMode(saved.view);
+      }
+      if (typeof saved.hideWeak === "boolean") setHideLowConfidence(saved.hideWeak);
+
+      const safeTempo = typeof saved.tempo === "number" && saved.tempo > 0 ? saved.tempo : 1;
+      if (
+        typeof saved.t === "number" &&
+        saved.t > 2 &&
+        saved.t < durationSeconds - 2
+      ) {
+        setCurrentTime(saved.t / safeTempo);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const currentLessonJobIdRef = useRef(null);
+  const noteViewModeRef = useRef("practice");
+  const refreshProgressSummariesRef = useRef(() => {});
+  const progressSummariesRef = useRef({});
+
+  useEffect(() => {
+    progressSummariesRef.current = progressSummaries;
+  }, [progressSummaries]);
+
+  useEffect(() => {
+    currentLessonJobIdRef.current = currentLessonJobId;
+  }, [currentLessonJobId]);
+
+  useEffect(() => {
+    noteViewModeRef.current = noteViewMode;
+  }, [noteViewMode]);
+
+  useEffect(() => {
+    refreshProgressSummariesRef.current = refreshProgressSummaries;
+  }, [refreshProgressSummaries]);
 
   useEffect(() => {
     playModeRef.current = playMode;
@@ -1653,6 +1820,28 @@ function App() {
             const summary = buildResultsSummary();
             if (summary) {
               setShowResults(summary);
+
+              const jobId = currentLessonJobIdRef.current;
+              if (jobId) {
+                const payload = {
+                  job_id: jobId,
+                  hits: summary.hits,
+                  missed: summary.missed,
+                  wrong: summary.wrong,
+                  accuracy: summary.accuracy,
+                  stars: summary.stars,
+                  mode: playModeRef.current,
+                  note_view: noteViewModeRef.current,
+                  tempo,
+                  duration_seconds: lessonDurationSeconds,
+                };
+
+                setTimeout(() => {
+                  saveLessonProgress(payload)
+                    .then(() => refreshProgressSummariesRef.current())
+                    .catch(() => {});
+                }, 0);
+              }
             }
 
             return 0;
@@ -2307,6 +2496,15 @@ return (
                             {run.detected_key || "Unknown key"} · {run.note_count ?? 0} notes ·{" "}
                             {run.transcription_method || "unknown"}
                           </span>
+
+                          {progressSummaries[run.job_id] && (
+                            <span className="lesson-progress-badge">
+                              {"★".repeat(progressSummaries[run.job_id].best_stars || 0)}
+                              {"☆".repeat(3 - (progressSummaries[run.job_id].best_stars || 0))}
+                              {" "}
+                              {progressSummaries[run.job_id].best_accuracy}%
+                            </span>
+                          )}
                         </div>
 
                         <div className="session-item-actions">
@@ -2694,6 +2892,16 @@ return (
                       </span>
 
                       <small>{run.transcription_method || "unknown"}</small>
+
+                      {progressSummaries[run.job_id] && (
+                        <span className="lesson-progress-badge">
+                          {"★".repeat(progressSummaries[run.job_id].best_stars || 0)}
+                          {"☆".repeat(3 - (progressSummaries[run.job_id].best_stars || 0))}
+                          {" "}
+                          {progressSummaries[run.job_id].best_accuracy}% ·{" "}
+                          {progressSummaries[run.job_id].attempts}×
+                        </span>
+                      )}
                     </button>
 
                     <button
@@ -3115,6 +3323,34 @@ return (
                 {t("notes.beginner")}
               </button>
             </div>
+          </div>
+
+          <div className="mini-control-pill weak-pill" aria-label="Low-confidence notes">
+            <span className="mini-mode-label">{t("controls.weak")}</span>
+
+            <div className="mini-mode-switch">
+              <button
+                type="button"
+                className={!hideLowConfidence ? "active" : ""}
+                onClick={() => setHideLowConfidence(false)}
+              >
+                {t("weak.show")}
+              </button>
+
+              <button
+                type="button"
+                className={hideLowConfidence ? "active" : ""}
+                onClick={() => setHideLowConfidence(true)}
+              >
+                {t("weak.hide")}
+              </button>
+            </div>
+
+            {hideLowConfidence && hiddenLowConfidenceCount > 0 && (
+              <span className="weak-hidden-count">
+                {hiddenLowConfidenceCount} {t("weak.hiddenCount")}
+              </span>
+            )}
           </div>
 
           <div className="mini-control-pill mic-pill" aria-label="Live microphone practice">
