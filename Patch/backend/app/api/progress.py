@@ -25,6 +25,7 @@ class SessionIn(BaseModel):
     mode: str | None = Field(default=None, max_length=24)
     note_view: str | None = Field(default=None, max_length=24)
     duration_seconds: float | None = Field(default=None, ge=0)
+    weak_spots: list[dict] | None = Field(default=None, max_length=300)
 
 
 class PositionIn(BaseModel):

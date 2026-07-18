@@ -341,3 +341,17 @@ export async function saveLessonPosition(jobId, positionSeconds, noteView) {
 
   return response.json();
 }
+
+
+export async function requestCoachPlan(jobId, language = "en") {
+  const response = await fetch(
+    `${API_BASE_URL}/api/coach/${encodeURIComponent(jobId)}?language=${language === "bg" ? "bg" : "en"}`,
+    { method: "POST" }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Coach failed: ${response.status}`);
+  }
+
+  return response.json();
+}
