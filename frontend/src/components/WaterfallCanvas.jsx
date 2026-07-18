@@ -30,7 +30,21 @@ const HIT_LINE_GLOW = "rgba(190, 120, 255, 0.12)";
 
 
 const PIXELS_PER_SECOND = 140;
-const NOTE_WIDTH = 22;
+const NOTE_WIDTH = 22; // legacy fallback
+
+function countWhiteKeys(lowestPitch, highestPitch) {
+  let count = 0;
+  for (let pitch = lowestPitch; pitch <= highestPitch; pitch += 1) {
+    if (!isBlackKeyPitch(pitch)) count += 1;
+  }
+  return Math.max(count, 1);
+}
+
+function noteBlockWidth(pitch, width, lowestPitch, highestPitch) {
+  const keyWidth = width / countWhiteKeys(lowestPitch, highestPitch);
+  const ratio = isBlackKeyPitch(pitch) ? 0.62 : 0.84;
+  return Math.min(56, Math.max(12, keyWidth * ratio));
+}
 const NOTE_VISUAL_Y_OFFSET = 10;
 const HIT_LINE_Y_RATIO = 0.985;
 const RAW_MIN_NOTE_HEIGHT = 8;
@@ -431,7 +445,11 @@ function drawPracticeConnector(ctx, previousNote, currentNote, width, hitLineY, 
   }
 
   const palette = notePalette(currentNote, colors);
-  const rectX = x - PRACTICE_CONNECTOR_WIDTH / 2;
+  const connectorWidth = Math.min(
+    PRACTICE_CONNECTOR_WIDTH * 2,
+    Math.max(5, noteBlockWidth(currentNote.pitch, width, lowestPitch, highestPitch) * 0.34)
+  );
+  const rectX = x - connectorWidth / 2;
 
   ctx.save();
 
@@ -446,7 +464,7 @@ function drawPracticeConnector(ctx, previousNote, currentNote, width, hitLineY, 
     ctx,
     rectX,
     connectorTop,
-    PRACTICE_CONNECTOR_WIDTH,
+    connectorWidth,
     connectorHeight,
     999
   );
@@ -544,7 +562,7 @@ function drawNote(
   const confidence =
     level === "unknown" ? UNKNOWN_CONFIDENCE_STYLE : confidenceStyle[level];
 
-  const rectW = NOTE_WIDTH;
+  const rectW = noteBlockWidth(note.pitch, width, lowestPitch, highestPitch);
   const rectX = x - rectW / 2;
   const rectY = y;
   const rectH = h;
