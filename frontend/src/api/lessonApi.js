@@ -295,3 +295,49 @@ export async function updatePipelineRunThumbnail(jobId, thumbnailUrl) {
 
   return response.json();
 }
+
+export async function saveLessonProgress(payload) {
+  const response = await fetch(`${API_BASE_URL}/api/progress`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Progress save failed: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function fetchProgressSummary() {
+  const response = await fetch(`${API_BASE_URL}/api/progress/summary`);
+
+  if (!response.ok) {
+    throw new Error(`Progress summary failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.summary || {};
+}
+
+
+export async function saveLessonPosition(jobId, positionSeconds, noteView) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/progress/${encodeURIComponent(jobId)}/position`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        position_seconds: positionSeconds,
+        note_view: noteView,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Position save failed: ${response.status}`);
+  }
+
+  return response.json();
+}

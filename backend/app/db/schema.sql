@@ -170,3 +170,30 @@ ON correction_proposals(correction_run_id);
 CREATE INDEX IF NOT EXISTS idx_correction_validations_correction_run_id
 ON correction_validations(correction_run_id);
 
+
+CREATE TABLE IF NOT EXISTS lesson_progress (
+    job_id TEXT PRIMARY KEY,
+    last_position_seconds REAL NOT NULL DEFAULT 0,
+    best_accuracy INTEGER,
+    best_stars INTEGER NOT NULL DEFAULT 0,
+    total_attempts INTEGER NOT NULL DEFAULT 0,
+    last_note_view TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS practice_sessions (
+    id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    mode TEXT,
+    note_view TEXT,
+    hits INTEGER NOT NULL DEFAULT 0,
+    missed INTEGER NOT NULL DEFAULT 0,
+    wrong INTEGER NOT NULL DEFAULT 0,
+    accuracy INTEGER,
+    stars INTEGER NOT NULL DEFAULT 0,
+    duration_seconds REAL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_practice_sessions_job
+    ON practice_sessions (job_id, created_at DESC);

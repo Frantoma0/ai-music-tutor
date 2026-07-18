@@ -109,6 +109,43 @@ function noteStrength(note) {
   return noteConfidence(note) * 0.6 + (noteVelocity(note) / 127) * 0.4;
 }
 
+/*
+ * Skyline protection: the top right-hand voice (melody) and the bottom
+ * left-hand voice (bass) in every short window are structurally important.
+ * They are exempt from dust / confidence / density removal so aggressive
+ * cleaning can never eat the tune itself.
+ */
+function computeProtectedSkyline(notes, bucketSeconds = 0.3) {
+  const protectedIds = new Set();
+  const buckets = new Map();
+
+  for (const note of notes) {
+    const key = `${noteHand(note)}:${Math.floor(note.start / bucketSeconds)}`;
+    const current = buckets.get(key);
+
+    if (!current) {
+      buckets.set(key, note);
+      continue;
+    }
+
+    const hand = noteHand(note);
+    const better =
+      hand === "right"
+        ? note.pitch > current.pitch
+        : note.pitch < current.pitch;
+
+    if (better) buckets.set(key, note);
+  }
+
+  for (const note of buckets.values()) {
+    if (note.id !== undefined && note.id !== null) {
+      protectedIds.add(note.id);
+    }
+  }
+
+  return protectedIds;
+}
+
 function normalizeNotes(notes) {
   return notes
     .map((note) => {
@@ -351,7 +388,7 @@ function enforceMinimumDurations(notes, minDuration) {
 /* Pass 2 – adaptive confidence floor                                 */
 /* ---------------------------------------------------------------- */
 
-function applyConfidenceFloor(notes, options) {
+function applyConfidenceFloor(notes, options, protectedIds = new Set()) {
   const confidences = notes
     .map((note) =>
       note.confidence === null || note.confidence === undefined
@@ -374,6 +411,10 @@ function applyConfidenceFloor(notes, options) {
   );
 
   return notes.filter((note) => {
+    if (protectedIds.has(note.id)) {
+      return true;
+    }
+
     if (note.confidence === null || note.confidence === undefined) {
       return true;
     }
@@ -397,12 +438,17 @@ function applyConfidenceFloor(notes, options) {
 /* currently sounding notes can.                                      */
 /* ---------------------------------------------------------------- */
 
-function removeSustainedHarmonicGhosts(notes, options) {
+function removeSustainedHarmonicGhosts(notes, options, protectedIds = new Set()) {
   const sorted = [...notes].sort((a, b) => a.start - b.start || a.pitch - b.pitch);
   const kept = [];
   const removed = new Set();
 
   for (const note of sorted) {
+    if (protectedIds.has(note.id)) {
+      kept.push(note);
+      continue;
+    }
+
     // Fundamentals currently sounding under this note's onset.
     let isGhost = false;
 
@@ -453,6 +499,7 @@ function applyDensityCap(notes, options) {
   }
 
   const dropped = new Set();
+  const skyline = computeProtectedSkyline(notes);
 
   for (const [key, bucketNotes] of buckets) {
     const hand = key.startsWith("left") ? "left" : "right";
@@ -475,7 +522,9 @@ function applyDensityCap(notes, options) {
       .sort((a, b) => noteStrength(b) - noteStrength(a));
 
     for (const note of rest.slice(Math.max(limit - 1, 0))) {
-      dropped.add(note);
+      if (!skyline.has(note.id)) {
+        dropped.add(note);
+      }
     }
   }
 
@@ -557,9 +606,13 @@ export function buildPlayableNotes(notes = [], levelOrOptions = "practice") {
   const options = base;
 
   const normalized = normalizeNotes(notes);
-  let working = normalized.filter((note) => !isDustNote(note, options));
-  working = applyConfidenceFloor(working, options);
-  working = removeSustainedHarmonicGhosts(working, options);
+  const protectedIds = computeProtectedSkyline(normalized);
+
+  let working = normalized.filter(
+    (note) => protectedIds.has(note.id) || !isDustNote(note, options)
+  );
+  working = applyConfidenceFloor(working, options, protectedIds);
+  working = removeSustainedHarmonicGhosts(working, options, protectedIds);
 
   const clusters = clusterByOnset(working, options.onsetClusterWindowSeconds);
   const clusteredResult = [];
