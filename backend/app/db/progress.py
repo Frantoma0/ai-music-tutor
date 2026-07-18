@@ -57,6 +57,14 @@ async def init_progress_schema(db_path: str | Path = DEFAULT_DB_PATH) -> None:
                 ON practice_sessions (job_id, created_at);
                 """
             )
+
+            try:
+                connection.execute(
+                    "ALTER TABLE practice_sessions ADD COLUMN weak_spots_json TEXT"
+                )
+            except sqlite3.OperationalError:
+                pass  # column already exists
+
             connection.commit()
 
     await asyncio.to_thread(_init)
@@ -72,8 +80,15 @@ async def save_practice_session(
     mode: str | None = None,
     note_view: str | None = None,
     duration_seconds: float | None = None,
+    weak_spots: list | None = None,
     db_path: str | Path = DEFAULT_DB_PATH,
 ) -> dict[str, Any]:
+    import json as _json
+
+    weak_spots_json = None
+    if weak_spots:
+        weak_spots_json = _json.dumps(weak_spots[:300], ensure_ascii=False)
+
     record = {
         "id": f"ps_{uuid.uuid4().hex[:12]}",
         "job_id": job_id,
@@ -85,6 +100,7 @@ async def save_practice_session(
         "accuracy": int(accuracy),
         "stars": int(stars),
         "duration_seconds": duration_seconds,
+        "weak_spots_json": weak_spots_json,
         "created_at": _now_iso(),
     }
 
@@ -94,10 +110,10 @@ async def save_practice_session(
                 """
                 INSERT INTO practice_sessions (
                     id, job_id, mode, note_view, hits, missed, wrong,
-                    accuracy, stars, duration_seconds, created_at
+                    accuracy, stars, duration_seconds, weak_spots_json, created_at
                 ) VALUES (
                     :id, :job_id, :mode, :note_view, :hits, :missed, :wrong,
-                    :accuracy, :stars, :duration_seconds, :created_at
+                    :accuracy, :stars, :duration_seconds, :weak_spots_json, :created_at
                 )
                 """,
                 record,

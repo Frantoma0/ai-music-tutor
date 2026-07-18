@@ -39,7 +39,7 @@ import {
   titleFromFilename,
   titleFromYouTubeUrl,
   uploadAudioFile,
-  uploadYoutubeAudio, saveLessonProgress, fetchProgressSummary, saveLessonPosition } from "./api/lessonApi";
+  uploadYoutubeAudio, saveLessonProgress, fetchProgressSummary, saveLessonPosition, requestCoachPlan } from "./api/lessonApi";
 
 const FALLBACK_DURATION_SECONDS = 4.2;
 
@@ -128,6 +128,19 @@ const UI_COPY = {
     "controls.mic": "Mic",
     "notes.beginner": "Beginner",
     "controls.weak": "Weak notes",
+    "coach.button": "Coach",
+    "coach.title": "Your practice plan",
+    "coach.loading": "Analyzing your practice...",
+    "coach.empty": "Play at least one full attempt with mic or MIDI on, and I'll build your plan.",
+    "coach.error": "Coach is unavailable right now.",
+    "coach.practice": "Practice this",
+    "coach.apply": "Apply",
+    "coach.recommended": "Recommended",
+    "coach.errorsWord": "slips",
+    "coach.handLeft": "left hand",
+    "coach.handRight": "right hand",
+    "coach.handBoth": "both hands",
+    "coach.close": "Close",
     "weak.show": "Show",
     "weak.hide": "Hide",
     "weak.hiddenCount": "hidden",
@@ -266,6 +279,19 @@ const UI_COPY = {
     "controls.mic": "Микрофон",
     "notes.beginner": "Начинаещ",
     "controls.weak": "Слаби ноти",
+    "coach.button": "Коуч",
+    "coach.title": "Твоят план за упражнение",
+    "coach.loading": "Анализирам свиренето ти...",
+    "coach.empty": "Изсвири поне един пълен опит с включен микрофон или MIDI и ще ти направя план.",
+    "coach.error": "Коучът не е достъпен в момента.",
+    "coach.practice": "Упражнявай това",
+    "coach.apply": "Приложи",
+    "coach.recommended": "Препоръчано",
+    "coach.errorsWord": "грешки",
+    "coach.handLeft": "лява ръка",
+    "coach.handRight": "дясна ръка",
+    "coach.handBoth": "двете ръце",
+    "coach.close": "Затвори",
     "weak.show": "Покажи",
     "weak.hide": "Скрий",
     "weak.hiddenCount": "скрити",
@@ -817,6 +843,45 @@ function App() {
   });
   const [showResults, setShowResults] = useState(null);
   const [progressSummaries, setProgressSummaries] = useState({});
+  const [coachState, setCoachState] = useState({ status: "idle", plan: null });
+
+  const openCoach = React.useCallback(
+    async (delayMs = 0) => {
+      const jobId = currentLessonJobIdRef.current;
+      if (!jobId) return;
+
+      setCoachState({ status: "loading", plan: null });
+
+      if (delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+
+      try {
+        const result = await requestCoachPlan(jobId, language);
+
+        if (result.status === "ok" && result.plan) {
+          setCoachState({ status: "ready", plan: result.plan });
+        } else {
+          setCoachState({ status: "empty", plan: null });
+        }
+      } catch {
+        setCoachState({ status: "error", plan: null });
+      }
+    },
+    [language]
+  );
+
+  const seekToMusicalTimeRef = useRef(() => {});
+
+  const applyCoachSection = React.useCallback((section) => {
+    setLoopRegion({ a: section.start, b: section.end });
+    setTempo(section.tempo);
+    setActiveHand(
+      section.hand === "left" || section.hand === "right" ? section.hand : "both"
+    );
+    seekToMusicalTimeRef.current(section.start);
+    setCoachState({ status: "idle", plan: null });
+  }, []);
 
   const refreshProgressSummaries = React.useCallback(async () => {
     try {
@@ -1257,6 +1322,10 @@ function App() {
     };
   }, [currentLessonJobId]);
 
+  useEffect(() => {
+    seekToMusicalTimeRef.current = seekToMusicalTime;
+  }, [seekToMusicalTime]);
+
   /* ---------------- Live practice: scoring against the lesson ------------- */
 
   const HIT_WINDOW_EARLY_SECONDS = 0.35;
@@ -1267,6 +1336,7 @@ function App() {
   const isPlayingRef = useRef(false);
   const visibleNotesRef = useRef(visibleLessonNotes);
   const judgementsRef = useRef({});
+  const wrongEventsRef = useRef([]);
   const detectorRef = useRef(null);
 
   useEffect(() => {
@@ -1283,6 +1353,7 @@ function App() {
 
   const resetPracticeScoring = React.useCallback(() => {
     judgementsRef.current = {};
+    wrongEventsRef.current = [];
     setNoteJudgements({});
     setWrongFlashes([]);
     setWrongCount(0);
@@ -1290,6 +1361,14 @@ function App() {
 
   const registerWrongNote = React.useCallback((midi) => {
     setWrongCount((count) => count + 1);
+
+    if (wrongEventsRef.current.length < 300) {
+      wrongEventsRef.current.push({
+        t: musicalTimeRef.current,
+        pitch: midi,
+        kind: "wrong",
+      });
+    }
 
     const flashId = `${midi}-${Date.now()}`;
     setWrongFlashes((flashes) => [...flashes, { id: flashId, pitch: midi }]);
@@ -1823,8 +1902,30 @@ function App() {
 
               const jobId = currentLessonJobIdRef.current;
               if (jobId) {
+                const weakSpots = [];
+
+                for (const [noteId, status] of Object.entries(judgementsRef.current)) {
+                  if (status !== "miss") continue;
+                  const note = visibleNotesRef.current.find((n) => n.id === noteId);
+                  if (!note) continue;
+
+                  weakSpots.push({
+                    start: Number(note.start),
+                    end: Number(note.end),
+                    hand: note.hand === "left" || note.hand === "right" ? note.hand : null,
+                    kind: "miss",
+                  });
+                }
+
+                for (const event of wrongEventsRef.current) {
+                  weakSpots.push({ start: event.t, end: event.t, kind: "wrong" });
+                }
+
+                weakSpots.sort((a, b) => a.start - b.start);
+
                 const payload = {
                   job_id: jobId,
+                  weak_spots: weakSpots.slice(0, 200),
                   hits: summary.hits,
                   missed: summary.missed,
                   wrong: summary.wrong,
@@ -3091,6 +3192,112 @@ return (
 
         {screenMode === "lesson" && (
         <section className={`lesson-stage ${stageStateClass} view-mode-${viewMode}`}>
+          {coachState.status !== "idle" && (
+            <div className="coach-overlay" role="dialog" aria-label={t("coach.title")}>
+              <div className="coach-card">
+                <div className="coach-card-header">
+                  <strong>{t("coach.title")}</strong>
+                  <button
+                    type="button"
+                    className="settings-close-button"
+                    onClick={() => setCoachState({ status: "idle", plan: null })}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {coachState.status === "loading" && (
+                  <p className="coach-status">{t("coach.loading")}</p>
+                )}
+
+                {coachState.status === "empty" && (
+                  <p className="coach-status">{t("coach.empty")}</p>
+                )}
+
+                {coachState.status === "error" && (
+                  <p className="coach-status">{t("coach.error")}</p>
+                )}
+
+                {coachState.status === "ready" && coachState.plan && (
+                  <>
+                    <p className="coach-overall-tip">{coachState.plan.overall_tip}</p>
+
+                    {(coachState.plan.recommended_view ||
+                      coachState.plan.recommended_tempo) && (
+                      <div className="coach-recommended-row">
+                        <span>{t("coach.recommended")}:</span>
+
+                        {coachState.plan.recommended_view && (
+                          <button
+                            type="button"
+                            className="coach-chip"
+                            onClick={() =>
+                              setNoteViewMode(coachState.plan.recommended_view)
+                            }
+                          >
+                            {coachState.plan.recommended_view === "beginner"
+                              ? t("notes.beginner")
+                              : "Practice"}{" "}
+                            · {t("coach.apply")}
+                          </button>
+                        )}
+
+                        {coachState.plan.recommended_tempo && (
+                          <button
+                            type="button"
+                            className="coach-chip"
+                            onClick={() =>
+                              setTempo(coachState.plan.recommended_tempo)
+                            }
+                          >
+                            {Math.round(coachState.plan.recommended_tempo * 100)}% ·{" "}
+                            {t("coach.apply")}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="coach-sections">
+                      {coachState.plan.sections.map((section, index) => (
+                        <div key={index} className="coach-section">
+                          <div className="coach-section-main">
+                            <strong>
+                              {formatPlaybackTime(section.start)} – {formatPlaybackTime(section.end)}
+                            </strong>
+
+                            <span className="coach-section-meta">
+                              {section.hand === "left"
+                                ? t("coach.handLeft")
+                                : section.hand === "right"
+                                  ? t("coach.handRight")
+                                  : t("coach.handBoth")}{" "}
+                              · {section.errors} {t("coach.errorsWord")} ·{" "}
+                              {Math.round(section.tempo * 100)}%
+                            </span>
+
+                            <span className="coach-section-tip">{section.tip}</span>
+                          </div>
+
+                          <button
+                            type="button"
+                            className="coach-practice-button"
+                            onClick={() => applyCoachSection(section)}
+                          >
+                            {t("coach.practice")}
+                          </button>
+                        </div>
+                      ))}
+
+                      {coachState.plan.sections.length === 0 && (
+                        <p className="coach-status">{coachState.plan.overall_tip}</p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {countdown !== null && (
             <div className="countdown-overlay" aria-hidden="true">
               <span key={countdown} className="countdown-number">
@@ -3124,6 +3331,16 @@ return (
                 </div>
 
                 <div className="results-actions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowResults(null);
+                      openCoach(700);
+                    }}
+                  >
+                    {t("coach.button")} 🎯
+                  </button>
+
                   <button
                     type="button"
                     className="primary-control"
@@ -3324,6 +3541,15 @@ return (
               </button>
             </div>
           </div>
+
+          <button
+            type="button"
+            className="mini-control-pill coach-pill"
+            onClick={() => openCoach()}
+          >
+            <span className="coach-pill-icon" aria-hidden="true">🎯</span>
+            <span className="mini-mode-label">{t("coach.button")}</span>
+          </button>
 
           <div className="mini-control-pill weak-pill" aria-label="Low-confidence notes">
             <span className="mini-mode-label">{t("controls.weak")}</span>
