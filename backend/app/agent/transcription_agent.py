@@ -9,7 +9,6 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_AGENT_MODEL = "qwen3:8b"
 DEFAULT_OLLAMA_BASE_URL = "http://ollama:11434"
 
@@ -121,16 +120,16 @@ def select_agent_candidates(
     candidates: list[dict[str, Any]] = []
 
     for index, note in enumerate(notes):
-      confidence = note.get("confidence")
-      confidence_value = None if confidence is None else _safe_float(confidence, 1.0)
-      is_low_confidence = confidence_value is None or confidence_value <= 0.62
-      in_mask = bool(note.get("inCorrectionMask") or note.get("in_correction_mask"))
+        confidence = note.get("confidence")
+        confidence_value = None if confidence is None else _safe_float(confidence, 1.0)
+        is_low_confidence = confidence_value is None or confidence_value <= 0.62
+        in_mask = bool(note.get("inCorrectionMask") or note.get("in_correction_mask"))
 
-      if is_low_confidence or in_mask:
-          candidates.append(_candidate_from_note(note, index))
+        if is_low_confidence or in_mask:
+            candidates.append(_candidate_from_note(note, index))
 
-      if len(candidates) >= max_candidates:
-          break
+        if len(candidates) >= max_candidates:
+            break
 
     return candidates
 
@@ -230,19 +229,23 @@ def validate_llm_corrections(
         candidate_id = str(item.get("candidate_id") or "")
 
         if candidate_id not in candidate_by_id:
-            rejected.append({
-                "candidate_id": candidate_id,
-                "reason": "Unknown candidate_id.",
-                "item": item,
-            })
+            rejected.append(
+                {
+                    "candidate_id": candidate_id,
+                    "reason": "Unknown candidate_id.",
+                    "item": item,
+                }
+            )
             continue
 
         if candidate_id in seen_ids:
-            rejected.append({
-                "candidate_id": candidate_id,
-                "reason": "Duplicate candidate_id.",
-                "item": item,
-            })
+            rejected.append(
+                {
+                    "candidate_id": candidate_id,
+                    "reason": "Duplicate candidate_id.",
+                    "item": item,
+                }
+            )
             continue
 
         seen_ids.add(candidate_id)
@@ -252,34 +255,40 @@ def validate_llm_corrections(
         reason = str(item.get("reason") or "").strip()[:240]
 
         if action == "keep":
-            accepted.append({
-                "candidate_id": candidate_id,
-                "note_id": candidate["note_id"],
-                "action": "keep",
-                "original_pitch": candidate["pitch"],
-                "proposed_pitch": None,
-                "start": candidate["start"],
-                "end": candidate["end"],
-                "reason": reason or "LLM kept the original pitch.",
-            })
+            accepted.append(
+                {
+                    "candidate_id": candidate_id,
+                    "note_id": candidate["note_id"],
+                    "action": "keep",
+                    "original_pitch": candidate["pitch"],
+                    "proposed_pitch": None,
+                    "start": candidate["start"],
+                    "end": candidate["end"],
+                    "reason": reason or "LLM kept the original pitch.",
+                }
+            )
             continue
 
         if action != "shift_pitch":
-            rejected.append({
-                "candidate_id": candidate_id,
-                "reason": f"Unsupported action: {action}",
-                "item": item,
-            })
+            rejected.append(
+                {
+                    "candidate_id": candidate_id,
+                    "reason": f"Unsupported action: {action}",
+                    "item": item,
+                }
+            )
             continue
 
         proposed_pitch = item.get("proposed_pitch")
 
         if proposed_pitch is None:
-            rejected.append({
-                "candidate_id": candidate_id,
-                "reason": "shift_pitch requires proposed_pitch.",
-                "item": item,
-            })
+            rejected.append(
+                {
+                    "candidate_id": candidate_id,
+                    "reason": "shift_pitch requires proposed_pitch.",
+                    "item": item,
+                }
+            )
             continue
 
         proposed_pitch_int = _safe_int(proposed_pitch, -9999)
@@ -287,47 +296,55 @@ def validate_llm_corrections(
         shift = proposed_pitch_int - original_pitch
 
         if proposed_pitch_int < PIANO_MIN_MIDI or proposed_pitch_int > PIANO_MAX_MIDI:
-            rejected.append({
-                "candidate_id": candidate_id,
-                "reason": "proposed_pitch outside piano range.",
-                "item": item,
-            })
+            rejected.append(
+                {
+                    "candidate_id": candidate_id,
+                    "reason": "proposed_pitch outside piano range.",
+                    "item": item,
+                }
+            )
             continue
 
         if abs(shift) > MAX_SAFE_PITCH_SHIFT:
-            rejected.append({
-                "candidate_id": candidate_id,
-                "reason": "Pitch shift exceeds ±2 semitones.",
-                "item": item,
-            })
+            rejected.append(
+                {
+                    "candidate_id": candidate_id,
+                    "reason": "Pitch shift exceeds ±2 semitones.",
+                    "item": item,
+                }
+            )
             continue
 
-        accepted.append({
-            "candidate_id": candidate_id,
-            "note_id": candidate["note_id"],
-            "action": "shift_pitch",
-            "original_pitch": original_pitch,
-            "proposed_pitch": proposed_pitch_int,
-            "pitch_shift": shift,
-            "start": candidate["start"],
-            "end": candidate["end"],
-            "reason": reason or "LLM proposed a bounded pitch correction.",
-        })
+        accepted.append(
+            {
+                "candidate_id": candidate_id,
+                "note_id": candidate["note_id"],
+                "action": "shift_pitch",
+                "original_pitch": original_pitch,
+                "proposed_pitch": proposed_pitch_int,
+                "pitch_shift": shift,
+                "start": candidate["start"],
+                "end": candidate["end"],
+                "reason": reason or "LLM proposed a bounded pitch correction.",
+            }
+        )
 
     missing_ids = sorted(set(candidate_by_id) - seen_ids)
 
     for candidate_id in missing_ids:
         candidate = candidate_by_id[candidate_id]
-        accepted.append({
-            "candidate_id": candidate_id,
-            "note_id": candidate["note_id"],
-            "action": "keep",
-            "original_pitch": candidate["pitch"],
-            "proposed_pitch": None,
-            "start": candidate["start"],
-            "end": candidate["end"],
-            "reason": "Candidate was missing from LLM output, so deterministic fallback kept it unchanged.",
-        })
+        accepted.append(
+            {
+                "candidate_id": candidate_id,
+                "note_id": candidate["note_id"],
+                "action": "keep",
+                "original_pitch": candidate["pitch"],
+                "proposed_pitch": None,
+                "start": candidate["start"],
+                "end": candidate["end"],
+                "reason": "Candidate was missing from LLM output, so deterministic fallback kept it unchanged.",
+            }
+        )
 
     return {
         "status": "validated",
@@ -342,7 +359,9 @@ def validate_llm_corrections(
     }
 
 
-def build_empty_agent_trace(job_id: str, *, reason: str = "Agent was not reached.") -> dict[str, Any]:
+def build_empty_agent_trace(
+    job_id: str, *, reason: str = "Agent was not reached."
+) -> dict[str, Any]:
     return {
         "status": "not_started",
         "agent_type": "bounded_transcription_agent",
@@ -484,7 +503,13 @@ def run_bounded_transcription_agent(
             }
             trace["tool_plan"][2]["status"] = "completed"
             trace["tool_plan"][3]["status"] = "completed"
-        except (urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError, OSError) as exc:
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            ValueError,
+            json.JSONDecodeError,
+            OSError,
+        ) as exc:
             trace["llm"] = {
                 "status": "fallback_to_raw",
                 "base_url": base_url,
@@ -500,9 +525,9 @@ def run_bounded_transcription_agent(
             }
             trace["tool_plan"][2]["status"] = "failed_safe"
             trace["tool_plan"][3]["status"] = "skipped"
-            trace["decisions"]["final_midi_reason"] = (
-                "LLM correction failed or was unavailable, so the agent kept the raw MIDI artifact."
-            )
+            trace["decisions"][
+                "final_midi_reason"
+            ] = "LLM correction failed or was unavailable, so the agent kept the raw MIDI artifact."
 
     finished_at_ms = _now_ms()
     trace["finished_at_ms"] = finished_at_ms

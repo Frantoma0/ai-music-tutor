@@ -13,8 +13,7 @@ class FakeResponse:
         return None
 
     def json(self):
-        return {
-            "response": """<think>
+        return {"response": """<think>
 reasoning
 </think>
 
@@ -30,8 +29,7 @@ reasoning
     }
   ]
 }
-"""
-        }
+"""}
 
 
 def test_build_prompt_limits_actions_to_keep_or_flag_for_review():

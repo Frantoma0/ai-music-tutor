@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pretty_midi
 
 
@@ -118,10 +117,7 @@ def load_selected_candidates(mask_path: str | None) -> list[dict[str, Any]]:
 
     data = json.loads(path.read_text(encoding="utf-8"))
 
-    return [
-        item for item in data.get("candidates", [])
-        if item.get("selected")
-    ]
+    return [item for item in data.get("candidates", []) if item.get("selected")]
 
 
 def candidate_start(candidate: dict[str, Any]) -> float | None:
@@ -151,7 +147,8 @@ def find_est_for_candidate(
         return None
 
     possible = [
-        event for event in est_events
+        event
+        for event in est_events
         if event.pitch == pitch and abs(event.start - start) <= tolerance
     ]
 
@@ -184,15 +181,9 @@ def diagnose_correctable_errors(
     matched_ref_indices = {item["ref_index"] for item in pitch_matches}
     matched_est_indices = {item["est_index"] for item in pitch_matches}
 
-    unmatched_ref = [
-        item for item in ref_events
-        if item.index not in matched_ref_indices
-    ]
+    unmatched_ref = [item for item in ref_events if item.index not in matched_ref_indices]
 
-    unmatched_est = [
-        item for item in est_events
-        if item.index not in matched_est_indices
-    ]
+    unmatched_est = [item for item in est_events if item.index not in matched_est_indices]
 
     onset_only_matches = greedy_match(
         ref_events=unmatched_ref,
@@ -221,15 +212,9 @@ def diagnose_correctable_errors(
     onset_matched_est = {int(item["est_index"]) for item in onset_only_matches}
     onset_matched_ref = {int(item["ref_index"]) for item in onset_only_matches}
 
-    spurious_est = [
-        item for item in unmatched_est
-        if item.index not in onset_matched_est
-    ]
+    spurious_est = [item for item in unmatched_est if item.index not in onset_matched_est]
 
-    undetected_ref = [
-        item for item in unmatched_ref
-        if item.index not in onset_matched_ref
-    ]
+    undetected_ref = [item for item in unmatched_ref if item.index not in onset_matched_ref]
 
     for item in pitch_matches:
         bucket_by_est_index[int(item["est_index"])] = "already_correct_tp"
@@ -244,9 +229,7 @@ def diagnose_correctable_errors(
     )
 
     f1_step_per_fix = (
-        2 / (len(est_events) + len(ref_events))
-        if len(est_events) + len(ref_events)
-        else 0.0
+        2 / (len(est_events) + len(ref_events)) if len(est_events) + len(ref_events) else 0.0
     )
 
     oracle_gain = len(correctable) * f1_step_per_fix

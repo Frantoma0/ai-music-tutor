@@ -18,10 +18,7 @@ from app.scripts.qwen_three_candidate_smoke import (
 
 
 def _chunks(items: list[dict[str, Any]], size: int) -> list[list[dict[str, Any]]]:
-    return [
-        items[index:index + size]
-        for index in range(0, len(items), size)
-    ]
+    return [items[index : index + size] for index in range(0, len(items), size)]
 
 
 def _call_qwen(
@@ -97,8 +94,7 @@ def run_qwen_candidate_chunks_smoke(
                     "status": "completed",
                     "candidate_count": len(chunk_candidates),
                     "candidate_ids": [
-                        _compact_candidate(item)["candidate_id"]
-                        for item in chunk_candidates
+                        _compact_candidate(item)["candidate_id"] for item in chunk_candidates
                     ],
                     "validated": chunk_result["validated"],
                     "locked": chunk_result["locked"],
@@ -117,8 +113,7 @@ def run_qwen_candidate_chunks_smoke(
                     "status": "error",
                     "candidate_count": len(chunk_candidates),
                     "candidate_ids": [
-                        _compact_candidate(item)["candidate_id"]
-                        for item in chunk_candidates
+                        _compact_candidate(item)["candidate_id"] for item in chunk_candidates
                     ],
                     "validated": None,
                     "locked": None,
@@ -127,15 +122,9 @@ def run_qwen_candidate_chunks_smoke(
                 }
             )
 
-    expected_candidate_ids = [
-        _compact_candidate(item)["candidate_id"]
-        for item in candidates
-    ]
+    expected_candidate_ids = [_compact_candidate(item)["candidate_id"] for item in candidates]
 
-    locked_candidate_ids = [
-        item["candidate_id"]
-        for item in merged_locked_corrections
-    ]
+    locked_candidate_ids = [item["candidate_id"] for item in merged_locked_corrections]
 
     missing_candidate_ids = [
         candidate_id
@@ -175,12 +164,8 @@ def run_qwen_candidate_chunks_smoke(
         "candidate_count": len(candidates),
         "chunk_size": chunk_size,
         "chunk_count": len(candidate_chunks),
-        "completed_chunk_count": sum(
-            1 for item in chunk_results if item["status"] == "completed"
-        ),
-        "failed_chunk_count": sum(
-            1 for item in chunk_results if item["status"] == "error"
-        ),
+        "completed_chunk_count": sum(1 for item in chunk_results if item["status"] == "completed"),
+        "failed_chunk_count": sum(1 for item in chunk_results if item["status"] == "error"),
         "coverage": {
             "ok": coverage_ok,
             "expected_candidate_count": len(expected_candidate_ids),

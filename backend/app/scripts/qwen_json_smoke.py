@@ -16,9 +16,9 @@ def run_qwen_json_smoke(
     output: str,
 ) -> dict:
     prompt = (
-        'Return only valid JSON with these exact fields: '
+        "Return only valid JSON with these exact fields: "
         '{"status":"ok","message":"hello"}. '
-        'Do not include markdown.'
+        "Do not include markdown."
     )
 
     response = httpx.post(

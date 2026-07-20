@@ -1,8 +1,8 @@
 from app.mcp_tools.registry import registry
 
 
-def test_registry_has_seventeen_tools() -> None:
-    assert registry.count() == 17
+def test_registry_has_eighteen_tools() -> None:
+    assert registry.count() == 18
 
 
 def test_registry_tool_names_are_stable() -> None:
@@ -24,6 +24,7 @@ def test_registry_tool_names_are_stable() -> None:
         "list_correction_runs",
         "get_correction_run",
         "separate_lass",
+        "practice_coach",
     ]
 
 
@@ -39,11 +40,7 @@ def test_all_tools_have_valid_contracts() -> None:
 
 
 def test_gpu_tools_are_explicit() -> None:
-    gpu_tools = {
-        contract.name
-        for contract in registry.list_contracts()
-        if contract.uses_gpu
-    }
+    gpu_tools = {contract.name for contract in registry.list_contracts() if contract.uses_gpu}
 
     assert gpu_tools == {
         "separate_sources",

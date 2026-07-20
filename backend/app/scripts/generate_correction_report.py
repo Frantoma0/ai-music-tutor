@@ -40,7 +40,9 @@ def build_correction_report_markdown(run: dict) -> str:
     lines.append(f"| Proposal count | `{run.get('proposal_count')}` |")
     lines.append(f"| Approved count | `{run.get('approved_count')}` |")
     lines.append(f"| Rejected count | `{run.get('rejected_count')}` |")
-    lines.append(f"| MIDI mutation allowed | `{_fmt_bool(run.get('midi_mutation_allowed', False))}` |")
+    lines.append(
+        f"| MIDI mutation allowed | `{_fmt_bool(run.get('midi_mutation_allowed', False))}` |"
+    )
     lines.append(f"| MIDI mutated | `{_fmt_bool(run.get('midi_mutated', False))}` |")
     lines.append("")
 

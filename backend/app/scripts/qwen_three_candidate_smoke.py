@@ -125,7 +125,9 @@ def run_qwen_three_candidate_smoke(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run Qwen smoke test on 3 selected mask candidates.")
+    parser = argparse.ArgumentParser(
+        description="Run Qwen smoke test on 3 selected mask candidates."
+    )
     parser.add_argument("--base-url", default="http://host.docker.internal:11434")
     parser.add_argument("--model", default="qwen3:1.7b")
     parser.add_argument("--mask-path", required=True)

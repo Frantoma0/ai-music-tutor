@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import json
-import uuid
 import asyncio
+import json
 import sqlite3
+import uuid
 from pathlib import Path
 from typing import Any
 
 import aiosqlite
-
 
 DEFAULT_DB_PATH = Path("data/app.sqlite3")
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
@@ -34,14 +33,12 @@ async def initialize_database(db_path: str | Path = DEFAULT_DB_PATH) -> Path:
 
 async def list_tables(db_path: str | Path = DEFAULT_DB_PATH) -> list[str]:
     async with aiosqlite.connect(db_path) as db:
-        cursor = await db.execute(
-            """
+        cursor = await db.execute("""
             SELECT name
             FROM sqlite_master
             WHERE type = 'table'
             ORDER BY name
-            """
-        )
+            """)
         rows = await cursor.fetchall()
 
     return [row[0] for row in rows]
@@ -410,6 +407,7 @@ async def get_metrics_for_run(
         "count": len(metrics),
     }
 
+
 async def delete_pipeline_run_by_job_id(
     db_path: str | Path = DEFAULT_DB_PATH,
     job_id: str = "",
@@ -429,24 +427,22 @@ async def delete_pipeline_run_by_job_id(
 
     return await asyncio.to_thread(_delete)
 
+
 async def ensure_pipeline_runs_thumbnail_column(
     db_path: str | Path = DEFAULT_DB_PATH,
 ) -> None:
     def _ensure() -> None:
         with sqlite3.connect(db_path) as connection:
-            columns = connection.execute(
-                "PRAGMA table_info(pipeline_runs)"
-            ).fetchall()
+            columns = connection.execute("PRAGMA table_info(pipeline_runs)").fetchall()
 
             column_names = {column[1] for column in columns}
 
             if "thumbnail_url" not in column_names:
-                connection.execute(
-                    "ALTER TABLE pipeline_runs ADD COLUMN thumbnail_url TEXT"
-                )
+                connection.execute("ALTER TABLE pipeline_runs ADD COLUMN thumbnail_url TEXT")
                 connection.commit()
 
     await asyncio.to_thread(_ensure)
+
 
 async def set_pipeline_run_thumbnail_url(
     db_path: str | Path = DEFAULT_DB_PATH,
@@ -457,16 +453,12 @@ async def set_pipeline_run_thumbnail_url(
         with sqlite3.connect(db_path) as connection:
             connection.execute("PRAGMA foreign_keys = ON")
 
-            columns = connection.execute(
-                "PRAGMA table_info(pipeline_runs)"
-            ).fetchall()
+            columns = connection.execute("PRAGMA table_info(pipeline_runs)").fetchall()
 
             column_names = {column[1] for column in columns}
 
             if "thumbnail_url" not in column_names:
-                connection.execute(
-                    "ALTER TABLE pipeline_runs ADD COLUMN thumbnail_url TEXT"
-                )
+                connection.execute("ALTER TABLE pipeline_runs ADD COLUMN thumbnail_url TEXT")
 
             cursor = connection.execute(
                 """

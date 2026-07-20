@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
-
 ALLOWED_ACTIONS = {
     "keep",
     "flag_for_review",
@@ -141,7 +140,11 @@ def validate_correction_proposal(proposal: dict[str, Any]) -> CorrectionValidati
         if proposed_start is not None and proposed_start < 0:
             reasons.append("proposed_start_before_zero")
 
-        if proposed_end is not None and proposed_start is not None and proposed_end <= proposed_start:
+        if (
+            proposed_end is not None
+            and proposed_start is not None
+            and proposed_end <= proposed_start
+        ):
             reasons.append("proposed_end_must_be_after_proposed_start")
 
         if original_start is not None and proposed_start is not None:
@@ -186,10 +189,7 @@ def validate_correction_proposals(
 ) -> CorrectionValidationBatch:
     proposals = proposals_data.get("proposals") or []
 
-    validations = [
-        validate_correction_proposal(proposal)
-        for proposal in proposals
-    ]
+    validations = [validate_correction_proposal(proposal) for proposal in proposals]
 
     approved_count = sum(1 for item in validations if item.approved)
     rejected_count = len(validations) - approved_count

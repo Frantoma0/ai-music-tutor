@@ -13,7 +13,9 @@ def main() -> int:
     parser.add_argument("--selection", default="data/maestro/v3.0.0/selection/ci_pieces.csv")
     parser.add_argument("--midi-root", default="data/maestro/v3.0.0/maestro-v3.0.0")
     parser.add_argument("--job-prefix", default="day8-maestro-ci")
-    parser.add_argument("--output", default="artifacts/metrics/day9_maestro_ci_baseline_report.json")
+    parser.add_argument(
+        "--output", default="artifacts/metrics/day9_maestro_ci_baseline_report.json"
+    )
     parser.add_argument("--onset-tolerance", type=float, default=0.05)
     parser.add_argument("--offset-ratio", type=float, default=0.2)
 

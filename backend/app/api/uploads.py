@@ -9,7 +9,6 @@ from uuid import uuid4
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 
 UPLOAD_ROOT = Path("data/uploads")
@@ -238,11 +237,11 @@ async def upload_youtube_audio(payload: dict[str, Any]):
 
     try:
         download_result = run_ytdlp_command(download_command, timeout=300)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         raise HTTPException(
             status_code=408,
             detail="YouTube download timed out. Try a shorter video or another source.",
-        )
+        ) from exc
 
     combined_output = f"{download_result.stdout}\n{download_result.stderr}".lower()
 
@@ -294,11 +293,11 @@ async def upload_youtube_audio(payload: dict[str, Any]):
             timeout=300,
             check=False,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         raise HTTPException(
             status_code=408,
             detail="Audio conversion timed out. Try a shorter video or another source.",
-        )
+        ) from exc
 
     if convert_result.returncode != 0:
         raise HTTPException(

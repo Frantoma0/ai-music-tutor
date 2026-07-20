@@ -9,7 +9,6 @@ from fastapi.responses import FileResponse
 from app.db.database import DEFAULT_DB_PATH, get_pipeline_run
 from app.pipeline.lesson_preparation import prepare_lesson_for_job
 from app.pipeline.lesson_schema import LessonResponse
-from fastapi import HTTPException
 
 router = APIRouter(prefix="/api/lessons", tags=["lessons"])
 
@@ -25,6 +24,7 @@ async def get_lesson(
         raise HTTPException(status_code=404, detail=f"Lesson not found for job_id={job_id}")
 
     return lesson
+
 
 def resolve_midi_path(midi_path: str | None) -> Path | None:
     if not midi_path:
@@ -50,7 +50,9 @@ async def get_lesson_midi(
         raise HTTPException(status_code=404, detail=f"Lesson not found for job_id={job_id}")
 
     if version == "corrected":
-        raise HTTPException(status_code=404, detail="Corrected MIDI is not available for this lesson yet")
+        raise HTTPException(
+            status_code=404, detail="Corrected MIDI is not available for this lesson yet"
+        )
 
     transcription = run.get("transcription") or {}
     midi_path = transcription.get("midi_path") or run.get("midi_path")
@@ -64,4 +66,3 @@ async def get_lesson_midi(
         media_type="audio/midi",
         filename=f"{job_id}-{version}.mid",
     )
-

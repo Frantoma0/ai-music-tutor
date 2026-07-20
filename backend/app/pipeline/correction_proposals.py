@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
-
 ALLOWED_PROPOSAL_ACTIONS = {
     "keep",
     "flag_for_review",
@@ -145,11 +144,7 @@ def build_correction_proposals_from_mask(
         selected candidate -> constrained pitch/timing proposal
     """
     candidates = mask_data.get("candidates") or []
-    selected_candidates = [
-        candidate
-        for candidate in candidates
-        if bool(candidate.get("selected"))
-    ]
+    selected_candidates = [candidate for candidate in candidates if bool(candidate.get("selected"))]
 
     if max_proposals is not None:
         selected_candidates = selected_candidates[: max(0, int(max_proposals))]
@@ -165,9 +160,7 @@ def build_correction_proposals_from_mask(
         source_mask_path=source_mask_path,
         candidate_count=len(candidates),
         selected_candidate_count=sum(
-            1
-            for candidate in candidates
-            if bool(candidate.get("selected"))
+            1 for candidate in candidates if bool(candidate.get("selected"))
         ),
         proposal_count=len(proposals),
         proposals=proposals,

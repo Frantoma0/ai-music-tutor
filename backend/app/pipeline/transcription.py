@@ -215,8 +215,6 @@ def _try_basic_pitch(
         return None, None, f"{type(exc).__name__}: {exc}"
 
 
-
-
 def _mirror_transcription_to_data_midi(
     result: TranscriptionResult,
     job_id: str,
@@ -332,9 +330,7 @@ def transcribe_audio(
         notes = _extract_note_events(midi_path)
 
         method = (
-            "placeholder_midi_after_basic_pitch_fallback"
-            if use_basic_pitch
-            else "placeholder_midi"
+            "placeholder_midi_after_basic_pitch_fallback" if use_basic_pitch else "placeholder_midi"
         )
 
         result = TranscriptionResult(

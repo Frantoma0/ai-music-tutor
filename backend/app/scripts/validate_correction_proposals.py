@@ -46,7 +46,9 @@ def validate_correction_proposals_file(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Validate correction proposals before any MIDI mutation.")
+    parser = argparse.ArgumentParser(
+        description="Validate correction proposals before any MIDI mutation."
+    )
     parser.add_argument("--proposals-path", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument(

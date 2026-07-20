@@ -117,7 +117,9 @@ def build_markdown_report(
 
     lines.append("## 2. Per-piece metrics")
     lines.append("")
-    lines.append("| # | Job ID | Piece | Key | HVS | Precision | Recall | F1 | Overlap | Ref notes | Est notes |")
+    lines.append(
+        "| # | Job ID | Piece | Key | HVS | Precision | Recall | F1 | Overlap | Ref notes | Est notes |"
+    )
     lines.append("|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|")
 
     for index, row in enumerate(rows, start=1):
@@ -218,7 +220,9 @@ async def generate_report(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate a Markdown report from persisted baseline metrics.")
+    parser = argparse.ArgumentParser(
+        description="Generate a Markdown report from persisted baseline metrics."
+    )
     parser.add_argument("--db-path", default="data/app.sqlite3")
     parser.add_argument("--job-prefix", default="day9-maestro-ci-persisted")
     parser.add_argument("--output", default="artifacts/reports/day10_baseline_metrics_report.md")

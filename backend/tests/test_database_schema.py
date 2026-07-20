@@ -351,6 +351,7 @@ async def test_get_metrics_for_run_returns_none_for_missing_job(tmp_path):
     assert result is None
 
 
+@pytest.mark.asyncio
 async def test_correction_tables_are_created(tmp_path):
     from app.db.database import initialize_database, list_tables
 
@@ -365,6 +366,7 @@ async def test_correction_tables_are_created(tmp_path):
     assert "correction_validations" in tables
 
 
+@pytest.mark.asyncio
 async def test_correction_tables_have_expected_foreign_keys(tmp_path):
     import aiosqlite
 
@@ -389,6 +391,7 @@ async def test_correction_tables_have_expected_foreign_keys(tmp_path):
     assert any(row[2] == "correction_runs" for row in validation_fks)
 
 
+@pytest.mark.asyncio
 async def test_correction_tables_can_store_minimal_records(tmp_path):
     import aiosqlite
 

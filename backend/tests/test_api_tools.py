@@ -2,7 +2,6 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
-
 client = TestClient(app)
 
 
@@ -28,6 +27,7 @@ def test_tools_names_endpoint() -> None:
         "list_correction_runs",
         "get_correction_run",
         "separate_lass",
+        "practice_coach",
     ]
 
 
@@ -37,9 +37,13 @@ def test_tools_contracts_endpoint() -> None:
     assert response.status_code == 200
 
     data = response.json()
-    assert len(data) == 17
-    assert data[-1]["name"] == "separate_lass"
-    assert data[-1]["status"] == "experimental"
+    assert len(data) == 18
+
+    by_name = {contract["name"]: contract for contract in data}
+    assert data[-1]["name"] == "practice_coach"
+    assert by_name["practice_coach"]["status"] == "ready"
+    assert by_name["practice_coach"]["category"] == "lesson"
+    assert by_name["separate_lass"]["status"] == "experimental"
 
 
 def test_pipeline_websocket_stub() -> None:

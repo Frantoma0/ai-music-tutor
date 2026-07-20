@@ -76,13 +76,11 @@ def validate_locked_pitch_corrections(
     action_counts = Counter(item.get("action", "unknown") for item in corrections)
 
     approved_pitch_shifts = [
-        item for item in approved
-        if item.get("action") == "propose_pitch_shift"
+        item for item in approved if item.get("action") == "propose_pitch_shift"
     ]
 
     rejected_pitch_shifts = [
-        item for item in rejected
-        if item.get("action") == "propose_pitch_shift"
+        item for item in rejected if item.get("action") == "propose_pitch_shift"
     ]
 
     proposed_pitch_shift_count = action_counts.get("propose_pitch_shift", 0)

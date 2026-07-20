@@ -6,14 +6,13 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from app.agent.transcription_agent import build_empty_agent_trace, run_bounded_transcription_agent
 from app.pipeline.audio_ingestion import AudioExtractionResult, extract_audio
+from app.pipeline.audio_preprocess import preprocess_audio_for_transcription
 from app.pipeline.models import TracerBulletResult
 from app.pipeline.separation_quality import analyze_separation_quality
-from app.pipeline.resource_guard import gpu_sequential_guard
 from app.pipeline.source_separation import SourceSeparationResult, separate_sources
 from app.pipeline.tracer import run_tracer_bullet
-from app.pipeline.audio_preprocess import preprocess_audio_for_transcription
-from app.agent.transcription_agent import build_empty_agent_trace, run_bounded_transcription_agent
 
 
 @dataclass
@@ -36,7 +35,6 @@ class AudioToAnalysisPipelineResult:
 
     def to_dict(self) -> dict:
         return asdict(self)
-
 
 
 def _empty_transcription() -> dict[str, Any]:
@@ -79,6 +77,7 @@ def _load_transcription_metadata(
 def _empty_quality() -> dict[str, Any]:
     return {}
 
+
 def _empty_preprocessing() -> dict[str, Any]:
     return {
         "status": "skipped",
@@ -86,6 +85,7 @@ def _empty_preprocessing() -> dict[str, Any]:
         "filters": [],
         "error": None,
     }
+
 
 def _analyze_separation_quality_safely(
     extract_result: AudioExtractionResult,
@@ -282,7 +282,7 @@ def run_audio_to_analysis_pipeline(
             }
 
             if preprocess_result.status == "completed":
-                transcription_audio_path = str(preprocessed_audio_path)    
+                transcription_audio_path = str(preprocessed_audio_path)
 
         tracer_result: TracerBulletResult = run_tracer_bullet(
             audio_path=transcription_audio_path,
@@ -334,7 +334,7 @@ def run_audio_to_analysis_pipeline(
                 detected_key=tracer_result.detected_key,
                 hvs_score=tracer_result.hvs_score,
                 error=tracer_result.error,
-                    agent=agent_data,
+                agent=agent_data,
             )
 
         return AudioToAnalysisPipelineResult(
@@ -352,7 +352,7 @@ def run_audio_to_analysis_pipeline(
             detected_key=tracer_result.detected_key,
             hvs_score=tracer_result.hvs_score,
             error=None,
-                agent=agent_data,
+            agent=agent_data,
         )
 
     except Exception as exc:

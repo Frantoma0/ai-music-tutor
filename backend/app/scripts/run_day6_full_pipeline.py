@@ -8,7 +8,6 @@ import soundfile as sf
 
 from app.pipeline.orchestrator import run_audio_to_analysis_pipeline
 
-
 Path("data/samples").mkdir(parents=True, exist_ok=True)
 
 sample_rate = 16_000

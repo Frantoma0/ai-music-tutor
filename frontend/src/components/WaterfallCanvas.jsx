@@ -11,26 +11,11 @@ import { confidenceStyle, lessonColors } from "../lib/designTokens";
 import { buildBlackKeyAccent, hexToRgba } from "../lib/themes";
 
 
-const STAGE_MIN_HEIGHT = 640;
-const KEYBOARD_HEIGHT = 118;
-const KEYBOARD_WHITE_KEY_HEIGHT = 96;
-const KEYBOARD_BLACK_KEY_HEIGHT = 60;
-const KEYBOARD_BLACK_KEY_WIDTH_RATIO = 0.58;
-
-const PLAYFIELD_BG_LEFT = "#2F49AA";
-const PLAYFIELD_BG_MID = "#5448A0";
-const PLAYFIELD_BG_RIGHT = "#B05C9E";
-const PLAYFIELD_OVERLAY_TOP = "rgba(20, 24, 58, 0.22)";
-const PLAYFIELD_OVERLAY_BOTTOM = "rgba(9, 12, 30, 0.34)";
-const PLAYFIELD_GRID = "rgba(255, 255, 255, 0.085)";
-const PLAYFIELD_GRID_STRONG = "rgba(255, 255, 255, 0.13)";
-const PLAYFIELD_BORDER = "rgba(255, 220, 255, 0.52)";
 const HIT_LINE = "rgba(210, 155, 255, 0.30)";
 const HIT_LINE_GLOW = "rgba(190, 120, 255, 0.12)";
 
 
 const PIXELS_PER_SECOND = 140;
-const NOTE_WIDTH = 22; // legacy fallback
 
 function countWhiteKeys(lowestPitch, highestPitch) {
   let count = 0;
@@ -533,7 +518,6 @@ function drawNote(
   const yTop = hitLineY - (note.start - musicalTime) * PIXELS_PER_SECOND + NOTE_VISUAL_Y_OFFSET;
   const yBottom = hitLineY - (note.end - musicalTime) * PIXELS_PER_SECOND + NOTE_VISUAL_Y_OFFSET;
 
-  const realTopY = Math.min(yTop, yBottom);
   const realBottomY = Math.max(yTop, yBottom);
   const rawHeight = Math.abs(yBottom - yTop);
 

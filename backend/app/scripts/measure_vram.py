@@ -21,11 +21,7 @@ def read_gpu_memory_mb() -> int | None:
             text=True,
         )
 
-        values = [
-            int(line.strip())
-            for line in completed.stdout.splitlines()
-            if line.strip()
-        ]
+        values = [int(line.strip()) for line in completed.stdout.splitlines() if line.strip()]
 
         if not values:
             return None
@@ -37,9 +33,7 @@ def read_gpu_memory_mb() -> int | None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Measure peak GPU memory while running a command."
-    )
+    parser = argparse.ArgumentParser(description="Measure peak GPU memory while running a command.")
     parser.add_argument("--label", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--interval", type=float, default=0.25)

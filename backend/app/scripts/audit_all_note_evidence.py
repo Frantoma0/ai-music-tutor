@@ -12,32 +12,27 @@ def load_json(path: str) -> Any:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def local_features(note: dict[str, Any], notes: list[dict[str, Any]], window: float) -> dict[str, Any]:
+def local_features(
+    note: dict[str, Any], notes: list[dict[str, Any]], window: float
+) -> dict[str, Any]:
     start = note["start"]
     pitch = note["pitch"]
 
     nearby = [
-        other for other in notes
-        if other["id"] != note["id"]
-        and abs(other["start"] - start) <= window
+        other
+        for other in notes
+        if other["id"] != note["id"] and abs(other["start"] - start) <= window
     ]
 
     overlapping = [
-        other for other in notes
-        if other["id"] != note["id"]
-        and other["start"] <= start <= other["end"]
+        other
+        for other in notes
+        if other["id"] != note["id"] and other["start"] <= start <= other["end"]
     ]
 
-    before = [
-        other for other in notes
-        if other["end"] <= start
-    ]
+    before = [other for other in notes if other["end"] <= start]
 
-    after = [
-        other for other in notes
-        if other["start"] >= start
-        and other["id"] != note["id"]
-    ]
+    after = [other for other in notes if other["start"] >= start and other["id"] != note["id"]]
 
     prev_note = max(before, key=lambda x: x["end"], default=None)
     next_note = min(after, key=lambda x: x["start"], default=None)
@@ -82,14 +77,10 @@ def main() -> int:
     mask = load_json(args.mask_path)
     correctable = load_json(args.correctable_path)
 
-    candidates_by_id = {
-        item["id"]: item
-        for item in mask["candidates"]
-    }
+    candidates_by_id = {item["id"]: item for item in mask["candidates"]}
 
     bucket_by_id = {
-        item["candidate_id"]: item["bucket"]
-        for item in correctable.get("selected_items", [])
+        item["candidate_id"]: item["bucket"] for item in correctable.get("selected_items", [])
     }
 
     rows = []
@@ -110,32 +101,32 @@ def main() -> int:
 
         rule_conf_and_overlap = rule_conf_lt_050 and rule_overlap_ge_4
         three_signal_rule = (
-            rule_conf_lt_050
-            and rule_duration_gt_019
-            and (rule_overlap_ge_4 or rule_abs_prev_ge_12)
+            rule_conf_lt_050 and rule_duration_gt_019 and (rule_overlap_ge_4 or rule_abs_prev_ge_12)
         )
 
-        rows.append({
-            "id": note["id"],
-            "pitch": note["pitch"],
-            "pitch_name": note.get("pitch_name"),
-            "start": note["start"],
-            "end": note["end"],
-            "duration": duration,
-            "velocity": note.get("velocity"),
-            "confidence": confidence,
-            "hvs_score": candidate.get("hvs_score"),
-            "selected": bool(candidate.get("selected", False)),
-            "mask_reason": candidate.get("reason"),
-            "selected_bucket": bucket_by_id.get(note["id"], "not_selected_or_unlabeled"),
-            **features,
-            "rule_conf_lt_050": rule_conf_lt_050,
-            "rule_duration_gt_019": rule_duration_gt_019,
-            "rule_overlap_ge_4": rule_overlap_ge_4,
-            "rule_abs_prev_ge_12": rule_abs_prev_ge_12,
-            "rule_conf_and_overlap": rule_conf_and_overlap,
-            "three_signal_rule": three_signal_rule,
-        })
+        rows.append(
+            {
+                "id": note["id"],
+                "pitch": note["pitch"],
+                "pitch_name": note.get("pitch_name"),
+                "start": note["start"],
+                "end": note["end"],
+                "duration": duration,
+                "velocity": note.get("velocity"),
+                "confidence": confidence,
+                "hvs_score": candidate.get("hvs_score"),
+                "selected": bool(candidate.get("selected", False)),
+                "mask_reason": candidate.get("reason"),
+                "selected_bucket": bucket_by_id.get(note["id"], "not_selected_or_unlabeled"),
+                **features,
+                "rule_conf_lt_050": rule_conf_lt_050,
+                "rule_duration_gt_019": rule_duration_gt_019,
+                "rule_overlap_ge_4": rule_overlap_ge_4,
+                "rule_abs_prev_ge_12": rule_abs_prev_ge_12,
+                "rule_conf_and_overlap": rule_conf_and_overlap,
+                "three_signal_rule": three_signal_rule,
+            }
+        )
 
     summary: dict[str, Any] = {
         "status": "completed",
@@ -156,7 +147,9 @@ def main() -> int:
 
     for row in rows:
         bucket = row["selected_bucket"]
-        summary["selected_bucket_counts"][bucket] = summary["selected_bucket_counts"].get(bucket, 0) + 1
+        summary["selected_bucket_counts"][bucket] = (
+            summary["selected_bucket_counts"].get(bucket, 0) + 1
+        )
 
     for selected_value in [True, False]:
         group = [row for row in rows if row["selected"] is selected_value]
@@ -164,8 +157,12 @@ def main() -> int:
 
         summary["stats_by_selected"][key] = {
             "count": len(group),
-            "confidence": safe_stats([row["confidence"] for row in group if row["confidence"] is not None]),
-            "duration": safe_stats([row["duration"] for row in group if row["duration"] is not None]),
+            "confidence": safe_stats(
+                [row["confidence"] for row in group if row["confidence"] is not None]
+            ),
+            "duration": safe_stats(
+                [row["duration"] for row in group if row["duration"] is not None]
+            ),
             "overlap_count": safe_stats([row["overlap_count"] for row in group]),
             "nearby_count": safe_stats([row["nearby_count"] for row in group]),
         }
@@ -182,15 +179,21 @@ def main() -> int:
         writer.writeheader()
         writer.writerows(rows)
 
-    print(json.dumps({
-        "status": "completed",
-        "note_count": summary["note_count"],
-        "selected_count": summary["selected_count"],
-        "rule_counts": summary["rule_counts"],
-        "selected_bucket_counts": summary["selected_bucket_counts"],
-        "output_json": str(output_json),
-        "output_csv": str(output_csv),
-    }, indent=2, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "status": "completed",
+                "note_count": summary["note_count"],
+                "selected_count": summary["selected_count"],
+                "rule_counts": summary["rule_counts"],
+                "selected_bucket_counts": summary["selected_bucket_counts"],
+                "output_json": str(output_json),
+                "output_csv": str(output_csv),
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
 
     return 0
 

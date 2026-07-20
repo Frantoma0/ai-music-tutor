@@ -62,11 +62,7 @@ def test_qwen_candidate_chunks_smoke_merges_chunks_and_validates_coverage(
     def fake_post(url, json, timeout):
         prompt = json["prompt"]
 
-        candidate_ids = [
-            candidate["id"]
-            for candidate in candidates
-            if candidate["id"] in prompt
-        ]
+        candidate_ids = [candidate["id"] for candidate in candidates if candidate["id"] in prompt]
 
         return FakeResponse(candidate_ids)
 

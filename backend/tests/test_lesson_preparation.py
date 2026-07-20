@@ -77,8 +77,7 @@ async def test_prepare_lesson_maps_notes_hvs_mask_and_hands(tmp_path: Path) -> N
 
 
 def test_lesson_endpoint_returns_404_for_missing_job() -> None:
-    client = TestClient(app)
+    with TestClient(app) as client:
+        response = client.get("/api/lessons/missing-job")
 
-    response = client.get("/api/lessons/missing-job")
-
-    assert response.status_code == 404
+        assert response.status_code == 404

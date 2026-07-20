@@ -46,10 +46,9 @@ export function detectPitch(buffer, sampleRate) {
   const minLag = Math.floor(sampleRate / MAX_FREQUENCY);
   const lagLimit = Math.min(maxLag, Math.floor(size / 2));
 
-  let bestLag = -1;
-  let bestCorrelation = 0;
-
   // Normalized autocorrelation over the allowed lag range.
+  const correlations = new Float32Array(lagLimit + 1);
+
   for (let lag = minLag; lag <= lagLimit; lag += 1) {
     let correlation = 0;
     let energyA = 0;
@@ -63,40 +62,48 @@ export function detectPitch(buffer, sampleRate) {
       energyB += b * b;
     }
 
-    const normalizer = Math.sqrt(energyA * energyB) || 1;
-    const normalized = correlation / normalizer;
+    correlations[lag] = correlation / (Math.sqrt(energyA * energyB) || 1);
+  }
 
-    if (normalized > bestCorrelation) {
-      bestCorrelation = normalized;
-      bestLag = lag;
+  let globalBest = 0;
+
+  for (let lag = minLag; lag <= lagLimit; lag += 1) {
+    if (correlations[lag] > globalBest) {
+      globalBest = correlations[lag];
     }
   }
 
-  if (bestLag <= 0 || bestCorrelation < CLARITY_GATE) {
-    return { frequency: null, clarity: bestCorrelation, rms };
+  if (globalBest < CLARITY_GATE) {
+    return { frequency: null, clarity: globalBest, rms };
   }
+
+  // Autocorrelation of a periodic signal peaks at every multiple of the
+  // true period; the global maximum can land on a subharmonic (an octave
+  // or two down). The FIRST local maximum that comes close to the global
+  // one is the true fundamental.
+  const peakThreshold = globalBest * 0.95;
+  let bestLag = -1;
+
+  for (let lag = minLag + 1; lag < lagLimit; lag += 1) {
+    const value = correlations[lag];
+    const isLocalMaximum =
+      value >= correlations[lag - 1] && value >= correlations[lag + 1];
+
+    if (isLocalMaximum && value >= peakThreshold) {
+      bestLag = lag;
+      break;
+    }
+  }
+
+  if (bestLag <= 0) {
+    return { frequency: null, clarity: globalBest, rms };
+  }
+
+  const bestCorrelation = correlations[bestLag];
 
   // Parabolic interpolation around the best lag for sub-sample accuracy.
-  const correlationAt = (lag) => {
-    if (lag < minLag || lag > lagLimit) return 0;
-
-    let correlation = 0;
-    let energyA = 0;
-    let energyB = 0;
-
-    for (let i = 0; i < size - lag; i += 1) {
-      const a = buffer[i];
-      const b = buffer[i + lag];
-      correlation += a * b;
-      energyA += a * a;
-      energyB += b * b;
-    }
-
-    return correlation / (Math.sqrt(energyA * energyB) || 1);
-  };
-
-  const left = correlationAt(bestLag - 1);
-  const right = correlationAt(bestLag + 1);
+  const left = correlations[bestLag - 1];
+  const right = correlations[bestLag + 1];
   const denominator = 2 * (2 * bestCorrelation - left - right);
   const shift = denominator !== 0 ? (right - left) / denominator : 0;
   const refinedLag = bestLag + Math.max(-0.5, Math.min(0.5, shift));

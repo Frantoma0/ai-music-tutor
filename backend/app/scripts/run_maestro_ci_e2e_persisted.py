@@ -184,7 +184,9 @@ def main() -> int:
         results.append(item)
 
     report = {
-        "status": "completed" if all(item["status"] == "completed" for item in results) else "error",
+        "status": (
+            "completed" if all(item["status"] == "completed" for item in results) else "error"
+        ),
         "count": len(results),
         "completed_count": sum(1 for item in results if item["status"] == "completed"),
         "db_path": args.db_path,

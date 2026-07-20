@@ -210,10 +210,7 @@ def validate_correction_batch_json(data: dict[str, Any]) -> LLMCorrectionBatch:
     if len(corrections) > MAX_CORRECTIONS:
         raise CorrectionBatchValidationError("corrections exceeds maximum allowed size")
 
-    parsed = [
-        validate_correction_item_json(item)
-        for item in corrections
-    ]
+    parsed = [validate_correction_item_json(item) for item in corrections]
 
     return LLMCorrectionBatch(
         status=status,

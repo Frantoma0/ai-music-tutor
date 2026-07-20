@@ -147,15 +147,9 @@ def decompose_piece(
     onset_matched_ref = {item["ref_index"] for item in onset_matches}
     onset_matched_est = {item["est_index"] for item in onset_matches}
 
-    spurious_est = [
-        item for item in unmatched_est
-        if item.index not in onset_matched_est
-    ]
+    spurious_est = [item for item in unmatched_est if item.index not in onset_matched_est]
 
-    undetected_ref = [
-        item for item in unmatched_ref
-        if item.index not in onset_matched_ref
-    ]
+    undetected_ref = [item for item in unmatched_ref if item.index not in onset_matched_ref]
 
     baseline = f1_from_counts(
         tp=len(pitch_matches),
@@ -164,9 +158,7 @@ def decompose_piece(
     )
 
     f1_step_per_fix = (
-        2 / (len(est_events) + len(ref_events))
-        if len(est_events) + len(ref_events)
-        else 0.0
+        2 / (len(est_events) + len(ref_events)) if len(est_events) + len(ref_events) else 0.0
     )
 
     oracle_gain = len(correctable) * f1_step_per_fix
@@ -256,10 +248,18 @@ def main() -> int:
         "missing_or_failed_piece_count": len(piece_reports) - len(completed),
         "reference_note_count": sum(item.get("reference_note_count", 0) for item in completed),
         "estimated_note_count": sum(item.get("estimated_note_count", 0) for item in completed),
-        "already_correct_tp_count": sum(item.get("already_correct_tp_count", 0) for item in completed),
-        "correctable_pitch_error_le_2_count": sum(item.get("correctable_pitch_error_le_2_count", 0) for item in completed),
-        "uncorrectable_pitch_error_gt_2_count": sum(item.get("uncorrectable_pitch_error_gt_2_count", 0) for item in completed),
-        "spurious_or_timing_fp_count": sum(item.get("spurious_or_timing_fp_count", 0) for item in completed),
+        "already_correct_tp_count": sum(
+            item.get("already_correct_tp_count", 0) for item in completed
+        ),
+        "correctable_pitch_error_le_2_count": sum(
+            item.get("correctable_pitch_error_le_2_count", 0) for item in completed
+        ),
+        "uncorrectable_pitch_error_gt_2_count": sum(
+            item.get("uncorrectable_pitch_error_gt_2_count", 0) for item in completed
+        ),
+        "spurious_or_timing_fp_count": sum(
+            item.get("spurious_or_timing_fp_count", 0) for item in completed
+        ),
         "undetected_fn_count": sum(item.get("undetected_fn_count", 0) for item in completed),
     }
 
@@ -274,8 +274,7 @@ def main() -> int:
     denom = aggregate["estimated_note_count"] + aggregate["reference_note_count"]
     aggregate["f1_step_per_perfect_fix"] = 2 / denom if denom else 0.0
     aggregate["oracle_optimal_v4_gain"] = (
-        aggregate["correctable_pitch_error_le_2_count"]
-        * aggregate["f1_step_per_perfect_fix"]
+        aggregate["correctable_pitch_error_le_2_count"] * aggregate["f1_step_per_perfect_fix"]
     )
     aggregate["oracle_optimal_v4_f1"] = (
         aggregate_baseline["f1"] + aggregate["oracle_optimal_v4_gain"]
@@ -333,8 +332,12 @@ def main() -> int:
                     "reference_note_count": item.get("reference_note_count"),
                     "estimated_note_count": item.get("estimated_note_count"),
                     "already_correct_tp_count": item.get("already_correct_tp_count"),
-                    "correctable_pitch_error_le_2_count": item.get("correctable_pitch_error_le_2_count"),
-                    "uncorrectable_pitch_error_gt_2_count": item.get("uncorrectable_pitch_error_gt_2_count"),
+                    "correctable_pitch_error_le_2_count": item.get(
+                        "correctable_pitch_error_le_2_count"
+                    ),
+                    "uncorrectable_pitch_error_gt_2_count": item.get(
+                        "uncorrectable_pitch_error_gt_2_count"
+                    ),
                     "spurious_or_timing_fp_count": item.get("spurious_or_timing_fp_count"),
                     "undetected_fn_count": item.get("undetected_fn_count"),
                     "baseline_f1": baseline.get("f1"),
@@ -344,14 +347,20 @@ def main() -> int:
                 }
             )
 
-    print(json.dumps({
-        "status": "completed",
-        "piece_count": aggregate["piece_count"],
-        "completed_piece_count": aggregate["completed_piece_count"],
-        "aggregate": aggregate,
-        "output_json": str(output_json),
-        "output_csv": str(output_csv),
-    }, indent=2, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "status": "completed",
+                "piece_count": aggregate["piece_count"],
+                "completed_piece_count": aggregate["completed_piece_count"],
+                "aggregate": aggregate,
+                "output_json": str(output_json),
+                "output_csv": str(output_csv),
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
 
     return 0
 

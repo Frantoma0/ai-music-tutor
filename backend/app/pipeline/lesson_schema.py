@@ -4,7 +4,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-
 HvsLabel = Literal[
     "stable_chord_tone",
     "diatonic_non_chord_tone",
@@ -22,7 +21,9 @@ LessonStatus = Literal["pending", "running", "completed", "error"]
 
 
 class LessonNote(BaseModel):
-    id: str = Field(description="Stable note identifier shared across transcription, harmony, mask and correction stages")
+    id: str = Field(
+        description="Stable note identifier shared across transcription, harmony, mask and correction stages"
+    )
     pitch: int = Field(description="MIDI pitch number, piano range 21-108")
     pitch_name: str = Field(description="Human-readable pitch name such as C4")
     start: float = Field(description="Note onset in seconds from the start of the audio")
@@ -36,11 +37,21 @@ class LessonNote(BaseModel):
     hvs_score: float = Field(description="Harmonic violation score in 0-1")
     hvs_label: HvsLabel = Field(description="Categorical harmonic classification")
     hvs_reason: str = Field(description="Deterministic reason for the HVS classification")
-    hand: Hand = Field(default="unknown", description="left/right from C4 split, unknown when not assignable")
-    in_correction_mask: bool = Field(default=False, description="True when selected by generate_mask")
-    correction_status: CorrectionStatus = Field(default="none", description="Correction lifecycle status")
-    original_pitch: int | None = Field(default=None, description="Original pitch when a validated pitch shift is displayed")
-    correction_reason: str | None = Field(default=None, description="Correction or review rationale")
+    hand: Hand = Field(
+        default="unknown", description="left/right from C4 split, unknown when not assignable"
+    )
+    in_correction_mask: bool = Field(
+        default=False, description="True when selected by generate_mask"
+    )
+    correction_status: CorrectionStatus = Field(
+        default="none", description="Correction lifecycle status"
+    )
+    original_pitch: int | None = Field(
+        default=None, description="Original pitch when a validated pitch shift is displayed"
+    )
+    correction_reason: str | None = Field(
+        default=None, description="Correction or review rationale"
+    )
 
 
 class LessonMeta(BaseModel):

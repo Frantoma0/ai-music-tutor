@@ -70,7 +70,9 @@ async def generate_correction_mask_for_run(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate correction mask candidates for a persisted pipeline run.")
+    parser = argparse.ArgumentParser(
+        description="Generate correction mask candidates for a persisted pipeline run."
+    )
     parser.add_argument("--db-path", default="data/app.sqlite3")
     parser.add_argument("--job-id", required=True)
     parser.add_argument("--output", required=True)

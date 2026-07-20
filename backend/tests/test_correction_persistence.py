@@ -20,8 +20,7 @@ def test_init_correction_schema_creates_tables(tmp_path):
         import aiosqlite
 
         async with aiosqlite.connect(db_path) as db:
-            cursor = await db.execute(
-                """
+            cursor = await db.execute("""
                 SELECT name
                 FROM sqlite_master
                 WHERE type = 'table'
@@ -31,8 +30,7 @@ def test_init_correction_schema_creates_tables(tmp_path):
                     'correction_validations'
                   )
                 ORDER BY name
-                """
-            )
+                """)
             rows = await cursor.fetchall()
 
         return [row[0] for row in rows]
