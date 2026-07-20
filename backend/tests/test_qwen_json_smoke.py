@@ -10,13 +10,11 @@ class FakeResponse:
         return None
 
     def json(self):
-        return {
-            "response": """<think>
+        return {"response": """<think>
 internal reasoning
 </think>
 
-{"status":"ok","message":"hello"}"""
-        }
+{"status":"ok","message":"hello"}"""}
 
 
 def test_run_qwen_json_smoke_extracts_json_and_writes_artifact(tmp_path, monkeypatch):

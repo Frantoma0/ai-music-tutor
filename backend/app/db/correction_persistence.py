@@ -34,8 +34,7 @@ async def init_correction_schema(db_path: str | Path) -> None:
     async with aiosqlite.connect(db_path) as db:
         await db.execute("PRAGMA foreign_keys = ON")
 
-        await db.execute(
-            """
+        await db.execute("""
             CREATE TABLE IF NOT EXISTS correction_runs (
                 id TEXT PRIMARY KEY,
                 job_id TEXT,
@@ -54,11 +53,9 @@ async def init_correction_schema(db_path: str | Path) -> None:
                 midi_mutated INTEGER NOT NULL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            """
-        )
+            """)
 
-        await db.execute(
-            """
+        await db.execute("""
             CREATE TABLE IF NOT EXISTS correction_proposals (
                 id TEXT PRIMARY KEY,
                 correction_run_id TEXT NOT NULL,
@@ -81,11 +78,9 @@ async def init_correction_schema(db_path: str | Path) -> None:
                     REFERENCES correction_runs(id)
                     ON DELETE CASCADE
             )
-            """
-        )
+            """)
 
-        await db.execute(
-            """
+        await db.execute("""
             CREATE TABLE IF NOT EXISTS correction_validations (
                 id TEXT PRIMARY KEY,
                 correction_run_id TEXT NOT NULL,
@@ -101,36 +96,27 @@ async def init_correction_schema(db_path: str | Path) -> None:
                     REFERENCES correction_runs(id)
                     ON DELETE CASCADE
             )
-            """
-        )
+            """)
 
-        await db.execute(
-            """
+        await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_correction_runs_job_id
             ON correction_runs(job_id)
-            """
-        )
+            """)
 
-        await db.execute(
-            """
+        await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_correction_runs_pipeline_run_id
             ON correction_runs(pipeline_run_id)
-            """
-        )
+            """)
 
-        await db.execute(
-            """
+        await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_correction_proposals_run
             ON correction_proposals(correction_run_id)
-            """
-        )
+            """)
 
-        await db.execute(
-            """
+        await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_correction_validations_run
             ON correction_validations(correction_run_id)
-            """
-        )
+            """)
 
         await db.commit()
 
@@ -151,9 +137,7 @@ async def persist_correction_artifacts(
     correction_run_id = _new_id("crun")
 
     job_id = (
-        validation_data.get("job_id")
-        or proposals_data.get("job_id")
-        or mask_data.get("job_id")
+        validation_data.get("job_id") or proposals_data.get("job_id") or mask_data.get("job_id")
     )
 
     pipeline_run_id = mask_data.get("pipeline_run_id")
@@ -161,14 +145,10 @@ async def persist_correction_artifacts(
     note_count = int(mask_data.get("note_count") or 0)
     candidate_count = int(mask_data.get("candidate_count") or note_count or 0)
     selected_count = int(
-        mask_data.get("selected_count")
-        or proposals_data.get("selected_candidate_count")
-        or 0
+        mask_data.get("selected_count") or proposals_data.get("selected_candidate_count") or 0
     )
     proposal_count = int(
-        proposals_data.get("proposal_count")
-        or validation_data.get("proposal_count")
-        or 0
+        proposals_data.get("proposal_count") or validation_data.get("proposal_count") or 0
     )
     approved_count = int(validation_data.get("approved_count") or 0)
     rejected_count = int(validation_data.get("rejected_count") or 0)

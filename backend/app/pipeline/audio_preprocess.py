@@ -35,9 +35,7 @@ def preprocess_audio_for_transcription(
         filters.append("highpass=f=25")
 
     if trim_silence:
-        filters.append(
-            "silenceremove=start_periods=1:start_duration=0.12:start_threshold=-45dB"
-        )
+        filters.append("silenceremove=start_periods=1:start_duration=0.12:start_threshold=-45dB")
 
     if normalize_audio:
         filters.append("loudnorm=I=-18:TP=-1.5:LRA=11")

@@ -141,7 +141,9 @@ def generate_report(*, input_path: str, output: str) -> dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate Markdown report for chunked LLM correction run.")
+    parser = argparse.ArgumentParser(
+        description="Generate Markdown report for chunked LLM correction run."
+    )
     parser.add_argument("--input", required=True)
     parser.add_argument("--output", required=True)
 

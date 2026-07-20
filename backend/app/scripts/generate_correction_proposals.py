@@ -45,7 +45,9 @@ def generate_correction_proposals(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate safe correction proposals from a correction mask artifact.")
+    parser = argparse.ArgumentParser(
+        description="Generate safe correction proposals from a correction mask artifact."
+    )
     parser.add_argument("--mask-path", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--max-proposals", type=int, default=None)

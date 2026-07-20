@@ -150,7 +150,7 @@ def main() -> int:
 
     rows = []
 
-    for note, est in zip(notes, est_events):
+    for note, est in zip(notes, est_events, strict=False):
         match = match_by_est.get(est.index, {})
 
         rows.append(
@@ -198,12 +198,18 @@ def main() -> int:
         writer.writeheader()
         writer.writerows(rows)
 
-    print(json.dumps({
-        "status": "completed",
-        "bucket_counts": bucket_counts,
-        "output_json": str(output_json),
-        "output_csv": str(output_csv),
-    }, indent=2, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "status": "completed",
+                "bucket_counts": bucket_counts,
+                "output_json": str(output_json),
+                "output_csv": str(output_csv),
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
 
     return 0
 

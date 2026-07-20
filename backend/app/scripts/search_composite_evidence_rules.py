@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 TARGET_BUCKET = "spurious_or_timing_fp"
 
 
@@ -14,18 +13,17 @@ def load_rows(audit_path: str, labels_path: str) -> list[dict[str, Any]]:
     audit = json.loads(Path(audit_path).read_text(encoding="utf-8"))
     labels = json.loads(Path(labels_path).read_text(encoding="utf-8"))
 
-    label_by_id = {
-        row["id"]: row["bucket"]
-        for row in labels["rows"]
-    }
+    label_by_id = {row["id"]: row["bucket"] for row in labels["rows"]}
 
     rows = []
 
     for row in audit["rows"]:
-        rows.append({
-            **row,
-            "bucket": label_by_id[row["id"]],
-        })
+        rows.append(
+            {
+                **row,
+                "bucket": label_by_id[row["id"]],
+            }
+        )
 
     return rows
 
@@ -75,11 +73,7 @@ def evaluate_rule(
 
     precision = tp / (tp + fp) if tp + fp else 0.0
     recall = tp / (tp + fn) if tp + fn else 0.0
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if precision + recall
-        else 0.0
-    )
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
 
     bucket_counts: dict[str, int] = {}
 
@@ -90,8 +84,7 @@ def evaluate_rule(
     return {
         "clauses": list(clauses),
         "rule": " AND ".join(
-            f'{clause["field"]} {clause["op"]} {clause["threshold"]}'
-            for clause in clauses
+            f'{clause["field"]} {clause["op"]} {clause["threshold"]}' for clause in clauses
         ),
         "hits": len(hits),
         "tp": tp,
@@ -193,15 +186,21 @@ def main() -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    print(json.dumps({
-        "status": report["status"],
-        "target_bucket": report["target_bucket"],
-        "row_count": report["row_count"],
-        "target_count": report["target_count"],
-        "candidate_rule_count": report["candidate_rule_count"],
-        "best_f1_rule": top_by_f1[0] if top_by_f1 else None,
-        "output": str(output),
-    }, indent=2, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "status": report["status"],
+                "target_bucket": report["target_bucket"],
+                "row_count": report["row_count"],
+                "target_count": report["target_count"],
+                "candidate_rule_count": report["candidate_rule_count"],
+                "best_f1_rule": top_by_f1[0] if top_by_f1 else None,
+                "output": str(output),
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
 
     return 0
 

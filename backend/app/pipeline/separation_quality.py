@@ -6,7 +6,6 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-
 DEFAULT_SOLO_PIANO_THRESHOLD = 0.05
 
 

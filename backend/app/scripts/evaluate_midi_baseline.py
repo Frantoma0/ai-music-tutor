@@ -26,12 +26,14 @@ def _load_notes(midi_path: str | Path) -> tuple[np.ndarray, np.ndarray]:
             intervals.append((float(note.start), float(note.end)))
             pitches.append(int(note.pitch))
 
-    sorted_pairs = sorted(zip(intervals, pitches), key=lambda item: (item[0][0], item[1]))
+    sorted_pairs = sorted(
+        zip(intervals, pitches, strict=False), key=lambda item: (item[0][0], item[1])
+    )
 
     if not sorted_pairs:
         return np.empty((0, 2), dtype=float), np.empty((0,), dtype=int)
 
-    sorted_intervals, sorted_pitches = zip(*sorted_pairs)
+    sorted_intervals, sorted_pitches = zip(*sorted_pairs, strict=False)
 
     return (
         np.asarray(sorted_intervals, dtype=float),

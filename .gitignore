@@ -73,3 +73,8 @@ frontend/src/**/*.bak
 frontend/src/**/*.bak.*
 backend/app/**/*.bak
 backend/app/**/*.bak.*
+
+# Local development artifacts
+backend/data/
+frontend/.test-dist/
+.pytest_cache/

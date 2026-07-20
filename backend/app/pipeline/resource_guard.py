@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from time import monotonic
-from typing import Iterator
-
 
 _GPU_LOCK = threading.Lock()
 

@@ -4,7 +4,6 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
-
 client = TestClient(app)
 
 
@@ -98,7 +97,6 @@ def test_generate_mask_tool_returns_candidates_with_mocked_run(monkeypatch):
 
     assert data["candidates"][1]["selected"] is False
     assert data["candidates"][1]["reason"] == "confidence_above_threshold"
-
 
 
 def test_generate_mask_tool_omits_candidates_by_default(monkeypatch):

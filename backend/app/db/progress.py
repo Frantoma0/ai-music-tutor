@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -21,14 +21,13 @@ from .database import DEFAULT_DB_PATH
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 async def init_progress_schema(db_path: str | Path = DEFAULT_DB_PATH) -> None:
     def _init() -> None:
         with sqlite3.connect(str(db_path)) as connection:
-            connection.executescript(
-                """
+            connection.executescript("""
                 CREATE TABLE IF NOT EXISTS lesson_progress (
                     job_id TEXT PRIMARY KEY,
                     last_position_seconds REAL NOT NULL DEFAULT 0,
@@ -55,13 +54,10 @@ async def init_progress_schema(db_path: str | Path = DEFAULT_DB_PATH) -> None:
 
                 CREATE INDEX IF NOT EXISTS idx_practice_sessions_job
                 ON practice_sessions (job_id, created_at);
-                """
-            )
+                """)
 
             try:
-                connection.execute(
-                    "ALTER TABLE practice_sessions ADD COLUMN weak_spots_json TEXT"
-                )
+                connection.execute("ALTER TABLE practice_sessions ADD COLUMN weak_spots_json TEXT")
             except sqlite3.OperationalError:
                 pass  # column already exists
 

@@ -25,7 +25,7 @@ import json
 import os
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -45,7 +45,7 @@ MAX_TIP_LENGTH = 220
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _round_tempo(value: float) -> float:
@@ -111,9 +111,7 @@ def _normalize_weak_spots(sessions: list[dict[str, Any]]) -> list[dict[str, Any]
                     {
                         "start": start,
                         "end": float(item.get("end", start)),
-                        "hand": item.get("hand")
-                        if item.get("hand") in ("left", "right")
-                        else None,
+                        "hand": item.get("hand") if item.get("hand") in ("left", "right") else None,
                         "kind": "wrong" if item.get("kind") == "wrong" else "miss",
                     }
                 )
@@ -225,9 +223,7 @@ def build_deterministic_plan(
     else:
         recommended_view = None
 
-    recommended_tempo = (
-        min(section["tempo"] for section in sections) if sections else None
-    )
+    recommended_tempo = min(section["tempo"] for section in sections) if sections else None
 
     return {
         "generated_at": _now_iso(),
@@ -294,7 +290,7 @@ def _enrich_with_llm(
         plan["overall_tip"] = validated["overall_tip"]
         plan["sections"] = [
             {**section, "tip": tip}
-            for section, tip in zip(plan["sections"], validated["section_tips"])
+            for section, tip in zip(plan["sections"], validated["section_tips"], strict=True)
         ]
 
         llm_meta = {"used": True, "model": model, "status": "ok"}
@@ -319,9 +315,7 @@ async def _store_plan(
     def _write() -> None:
         with sqlite3.connect(str(db_path)) as connection:
             try:
-                connection.execute(
-                    "ALTER TABLE practice_plans ADD COLUMN job_id TEXT"
-                )
+                connection.execute("ALTER TABLE practice_plans ADD COLUMN job_id TEXT")
             except sqlite3.OperationalError:
                 pass  # column already exists
 
@@ -343,9 +337,7 @@ def _write_trace(job_id: str, trace: dict[str, Any]) -> str | None:
         trace_dir = Path("data/midi") / job_id
         trace_dir.mkdir(parents=True, exist_ok=True)
         trace_path = trace_dir / "coach_trace.json"
-        trace_path.write_text(
-            json.dumps(trace, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        trace_path.write_text(json.dumps(trace, indent=2, ensure_ascii=False), encoding="utf-8")
         return str(trace_path)
     except OSError:
         return None
@@ -375,9 +367,7 @@ async def run_practice_coach(
     model = os.getenv("OLLAMA_MODEL", DEFAULT_AGENT_MODEL)
 
     if use_llm and plan["sections"]:
-        plan, llm_meta = await asyncio.to_thread(
-            _enrich_with_llm, plan, base_url, model
-        )
+        plan, llm_meta = await asyncio.to_thread(_enrich_with_llm, plan, base_url, model)
     else:
         llm_meta = {"used": False, "model": model, "status": "skipped"}
 

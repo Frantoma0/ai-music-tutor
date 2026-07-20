@@ -1,0 +1,17 @@
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "UP"]
+ignore = [
+    "E501",  # long lines are handled by black where it matters
+    "B008",  # FastAPI dependency-injection pattern uses calls in defaults
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]

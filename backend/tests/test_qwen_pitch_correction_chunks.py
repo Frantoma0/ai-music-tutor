@@ -196,7 +196,10 @@ def test_qwen_pitch_correction_chunks_rejects_unsafe_pitch_shift(
 
     assert artifact["pitch_safety"]["status"] == "partial"
     assert artifact["pitch_safety"]["rejected"][0]["candidate_id"] == "n175"
-    assert "pitch_shift_exceeds_safe_limit" in artifact["pitch_safety"]["rejected"][0]["pitch_safety_reasons"]
+    assert (
+        "pitch_shift_exceeds_safe_limit"
+        in artifact["pitch_safety"]["rejected"][0]["pitch_safety_reasons"]
+    )
 
 
 def test_qwen_pitch_correction_chunks_marks_missing_coverage_as_error(

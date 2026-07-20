@@ -8227,7 +8227,7 @@ body[data-theme]:not([data-theme="daitune"]) ::-webkit-scrollbar-track {
   padding-bottom: 8px;
 }
 
-/* ===== GENERATED THEME OVERRIDES v2 (luminance audit, !important) ===== */
+/* ===== Theme overrides generated from a stylesheet luminance audit ===== */
 
 body[data-theme]:not([data-theme="daitune"]) .back-button,
 body[data-theme]:not([data-theme="daitune"]) .compact-confidence-pill,
@@ -8339,18 +8339,12 @@ body[data-theme]:not([data-theme="daitune"]) /* Low confidence chip */
 body[data-theme]:not([data-theme="daitune"]) /* Optional purple active state,
 body[data-theme]:not([data-theme="daitune"]) /* Progress pill with star icon */
 .progress-pill,
-body[data-theme]:not([data-theme="daitune"]) /* Tempo block: make it feel like a real section */
-.tempo-control,
-body[data-theme]:not([data-theme="daitune"]) /* Tiny illustrative icons inside view buttons */
-.view-icon,
-body[data-theme]:not([data-theme="daitune"]) /* View switch becomes one premium segmented capsule */
-.view-switch,
-body[data-theme]:not([data-theme="daitune"]) /* View switch: one group,
-body[data-theme]:not([data-theme="daitune"]) but clearer separated buttons */
-.view-switch,
+/* Keep non-default theme controls in the same visual language */
+body[data-theme]:not([data-theme="daitune"]) .tempo-control,
+body[data-theme]:not([data-theme="daitune"]) .view-icon,
+body[data-theme]:not([data-theme="daitune"]) .view-switch,
 body[data-theme]:not([data-theme="daitune"]) button,
-body[data-theme]:not([data-theme="daitune"]) same visual language */
-.back-button {
+body[data-theme]:not([data-theme="daitune"]) .back-button {
   background: var(--surface-soft) !important;
   border-color: var(--surface-border) !important;
 }
@@ -8530,24 +8524,18 @@ body[data-theme]:not([data-theme="daitune"]) /* ================================
    SVG HAND CONTROLS — no emoji,
 body[data-theme]:not([data-theme="daitune"]) /* Low confidence chip */
 .confidence-legend,
-body[data-theme]:not([data-theme="daitune"]) /* Push legend to the right side */
-.hand-legend,
-body[data-theme]:not([data-theme="daitune"]) /* Settings button */
-.settings-button,
-body[data-theme]:not([data-theme="daitune"]) /* Tempo block: make it feel like a real section */
-.tempo-control,
-body[data-theme]:not([data-theme="daitune"]) /* Time aligned inside the same section */
-.time-readout,
+/* Keep themed controls readable and visually consistent */
+body[data-theme]:not([data-theme="daitune"]) .hand-legend,
+body[data-theme]:not([data-theme="daitune"]) .settings-button,
+body[data-theme]:not([data-theme="daitune"]) .tempo-control,
+body[data-theme]:not([data-theme="daitune"]) .time-readout,
 body[data-theme]:not([data-theme="daitune"]) button,
-body[data-theme]:not([data-theme="daitune"]) premium segmented control
-   ========================================================= */
-
-.hands-control {
+body[data-theme]:not([data-theme="daitune"]) .hands-control {
   color: var(--text-primary) !important;
 }
 
 
-/* v2 manual: shells and stage never paint their own light gradients */
+/* Shells and the stage never paint their own light gradients under a theme */
 body[data-theme]:not([data-theme="daitune"]) .premium-shell,
 body[data-theme]:not([data-theme="daitune"]) .home-screen,
 body[data-theme]:not([data-theme="daitune"]) .app-shell,
@@ -8889,4 +8877,15 @@ body[data-theme]:not([data-theme="daitune"]) .lesson-progress-badge {
   .view-switch button span:last-child {
     display: none;
   }
+}
+
+.piano-model-select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--surface-border, rgba(179, 166, 228, 0.42));
+  background: var(--surface-input, rgba(255, 255, 255, 0.7));
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 13px;
 }

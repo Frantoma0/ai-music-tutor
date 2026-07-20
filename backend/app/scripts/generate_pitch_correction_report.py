@@ -23,8 +23,7 @@ def build_pitch_correction_report_markdown(data: dict[str, Any]) -> str:
     action_distribution = pitch_safety.get("action_distribution") or {}
 
     approved_pitch_shifts = [
-        item for item in approved
-        if item.get("action") == "propose_pitch_shift"
+        item for item in approved if item.get("action") == "propose_pitch_shift"
     ]
 
     lines: list[str] = []
@@ -151,7 +150,9 @@ def generate_report(*, input_path: str, output: str) -> dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate Markdown report for Qwen pitch correction run.")
+    parser = argparse.ArgumentParser(
+        description="Generate Markdown report for Qwen pitch correction run."
+    )
     parser.add_argument("--input", required=True)
     parser.add_argument("--output", required=True)
 

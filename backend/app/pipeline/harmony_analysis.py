@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
-
 NOTE_TO_PC = {
     "C": 0,
     "C#": 1,
@@ -198,7 +197,7 @@ def merge_hvs_into_notes(
 ) -> list[dict[str, Any]]:
     merged = []
 
-    for original, analyzed in zip(notes, harmony_result.notes):
+    for original, analyzed in zip(notes, harmony_result.notes, strict=False):
         item = dict(original)
         item["hvs_score"] = analyzed.hvs_score
         item["hvs_label"] = analyzed.hvs_label

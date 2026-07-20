@@ -38,7 +38,16 @@ export const PLAYABILITY_DEFAULTS = {
   ghostVelocitySlack: 10,
   ghostMaxDurationRatio: 1.2,
   sustainedGhostTailSeconds: 0.14,
+  sustainedGhostConfidenceSlack: 0.12,
+  sustainedGhostVelocitySlack: 16,
+  sustainedGhostWeakConfidence: 0.45,
   melodyProtectConfidence: 0.78,
+
+  // Key conformity (only active when keyPitchClasses is provided)
+  keyPitchClasses: null,
+  keyMinConfidence: 0.7,
+  keyMinDurationSeconds: 0.35,
+  keyUnreliableOutRatio: 0.25,
 
   // Pass 5 – polyphony cap
   maxVoicesPerHand: 3,
@@ -66,6 +75,10 @@ export const BEGINNER_OVERRIDES = {
   ghostConfidenceSlack: 0.12,
   ghostVelocitySlack: 18,
   sustainedGhostTailSeconds: 0.22,
+  sustainedGhostConfidenceSlack: 0.18,
+  sustainedGhostVelocitySlack: 24,
+  sustainedGhostWeakConfidence: 0.5,
+  keyMinConfidence: 0.8,
   maxVoicesPerHand: 2,
   maxVoicesTotal: 3,
   maxNotesPerSecondRight: 5,
@@ -115,27 +128,62 @@ function noteStrength(note) {
  * They are exempt from dust / confidence / density removal so aggressive
  * cleaning can never eat the tune itself.
  */
-function computeProtectedSkyline(notes, bucketSeconds = 0.3) {
-  const protectedIds = new Set();
+const SKYLINE_BUCKET_SECONDS = 0.5;
+const GHOST_INTERVALS_FOR_SKYLINE = [12, 19, 24];
+
+/*
+ * A note is "ghost-like" when a same-hand fundamental one or two octaves
+ * (or an octave plus a fifth) below is still sounding at its onset with
+ * comparable strength. Such a note can never represent the melody, so it
+ * must not win skyline protection: otherwise every overtone artifact
+ * above the tune would shield itself from the ghost filters.
+ */
+function isGhostLikeNote(note, sortedNotes) {
+  for (const lower of sortedNotes) {
+    if (lower.start >= note.start) break;
+    if (lower.end <= note.start + 0.02) continue;
+    if (noteHand(lower) !== noteHand(note)) continue;
+
+    const interval = note.pitch - lower.pitch;
+
+    if (!GHOST_INTERVALS_FOR_SKYLINE.includes(interval)) continue;
+
+    if (noteConfidence(lower) >= noteConfidence(note) - 0.05) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function computeProtectedSkyline(notes, bucketSeconds = SKYLINE_BUCKET_SECONDS) {
+  const sorted = [...notes].sort((a, b) => a.start - b.start);
   const buckets = new Map();
 
-  for (const note of notes) {
+  const isBetterVoice = (candidate, current) =>
+    noteHand(candidate) === "right"
+      ? candidate.pitch > current.pitch
+      : candidate.pitch < current.pitch;
+
+  for (const note of sorted) {
+    if (isGhostLikeNote(note, sorted)) continue;
+
+    // A note this weak and this short cannot plausibly carry the melody
+    // or the bass, so it does not earn protection from the cleanup passes.
+    const implausiblyWeak =
+      noteConfidence(note) < 0.45 && note.duration < 0.14;
+
+    if (implausiblyWeak) continue;
+
     const key = `${noteHand(note)}:${Math.floor(note.start / bucketSeconds)}`;
     const current = buckets.get(key);
 
-    if (!current) {
+    if (!current || isBetterVoice(note, current)) {
       buckets.set(key, note);
-      continue;
     }
-
-    const hand = noteHand(note);
-    const better =
-      hand === "right"
-        ? note.pitch > current.pitch
-        : note.pitch < current.pitch;
-
-    if (better) buckets.set(key, note);
   }
+
+  const protectedIds = new Set();
 
   for (const note of buckets.values()) {
     if (note.id !== undefined && note.id !== null) {
@@ -429,6 +477,93 @@ function applyConfidenceFloor(notes, options, protectedIds = new Set()) {
 }
 
 /* ---------------------------------------------------------------- */
+/* Key signature parsing and conformity                              */
+/* ---------------------------------------------------------------- */
+
+const NOTE_NAME_TO_PITCH_CLASS = {
+  C: 0, "C#": 1, DB: 1, D: 2, "D#": 3, EB: 3, E: 4, F: 5, "F#": 6,
+  GB: 6, G: 7, "G#": 8, AB: 8, A: 9, "A#": 10, BB: 10, B: 11,
+};
+
+const MAJOR_SCALE_INTERVALS = [0, 2, 4, 5, 7, 9, 11];
+// Natural minor plus the raised seventh, which is ubiquitous in practice.
+const MINOR_SCALE_INTERVALS = [0, 2, 3, 5, 7, 8, 10, 11];
+
+export function parseKeySignature(keyName) {
+  if (typeof keyName !== "string" || !keyName.trim()) {
+    return null;
+  }
+
+  const normalized = keyName
+    .trim()
+    .replace(/\u266f/g, "#")
+    .replace(/\u266d/g, "b")
+    .toUpperCase();
+
+  const match = normalized.match(/^([A-G][#B]?)\s*(MAJOR|MINOR|MAJ|MIN|M)?/);
+
+  if (!match) {
+    return null;
+  }
+
+  const root = NOTE_NAME_TO_PITCH_CLASS[match[1]];
+
+  if (root === undefined) {
+    return null;
+  }
+
+  const isMinor = /MIN|MINOR/.test(match[2] || "") || match[2] === "M";
+  const intervals = isMinor ? MINOR_SCALE_INTERVALS : MAJOR_SCALE_INTERVALS;
+
+  return new Set(intervals.map((interval) => (root + interval) % 12));
+}
+
+function applyKeyConformity(notes, options, protectedIds) {
+  const keyPitchClasses = options.keyPitchClasses;
+
+  if (!(keyPitchClasses instanceof Set) || keyPitchClasses.size === 0) {
+    return notes;
+  }
+
+  const outOfKey = notes.filter(
+    (note) => !keyPitchClasses.has(((note.pitch % 12) + 12) % 12)
+  );
+
+  // A high out-of-key ratio means the detected key is unreliable or the
+  // piece modulates heavily; in that case only clearly weak notes go.
+  const unreliableKey =
+    outOfKey.length / Math.max(notes.length, 1) > options.keyUnreliableOutRatio;
+
+  return notes.filter((note) => {
+    if (protectedIds.has(note.id)) {
+      return true;
+    }
+
+    if (keyPitchClasses.has(((note.pitch % 12) + 12) % 12)) {
+      return true;
+    }
+
+    const confidence = noteConfidence(note);
+    const hvsLabel = note.hvsLabel ?? note.hvs_label;
+    const backendFlagsChromatic =
+      typeof hvsLabel === "string" && hvsLabel.startsWith("chromatic");
+
+    if (unreliableKey) {
+      return !(confidence < 0.5 && note.duration < 0.12);
+    }
+
+    if (backendFlagsChromatic && confidence < 0.75) {
+      return false;
+    }
+
+    return (
+      confidence >= options.keyMinConfidence ||
+      note.duration >= options.keyMinDurationSeconds
+    );
+  });
+}
+
+/* ---------------------------------------------------------------- */
 /* Pass 4b – sustained harmonic ghosts across time                   */
 /*                                                                    */
 /* The classic Basic Pitch artifact on real recordings: while a real  */
@@ -460,18 +595,24 @@ function removeSustainedHarmonicGhosts(notes, options, protectedIds = new Set())
       const interval = note.pitch - lower.pitch;
       if (!options.ghostIntervals.includes(interval)) continue;
 
-      const weakerConfidence =
-        noteConfidence(note) <= noteConfidence(lower) + options.ghostConfidenceSlack;
-      const weakerVelocity =
-        noteVelocity(note) <= noteVelocity(lower) + options.ghostVelocitySlack;
       const insideTail =
         note.end <= lower.end + options.sustainedGhostTailSeconds;
+
+      if (!insideTail) continue;
+
+      const clearlyWeak =
+        noteConfidence(note) < options.sustainedGhostWeakConfidence;
+      const notStronger =
+        noteConfidence(note) <=
+          noteConfidence(lower) + options.sustainedGhostConfidenceSlack &&
+        noteVelocity(note) <=
+          noteVelocity(lower) + options.sustainedGhostVelocitySlack;
 
       const isProtectedMelody =
         noteConfidence(note) >= options.melodyProtectConfidence &&
         noteVelocity(note) >= noteVelocity(lower);
 
-      if (weakerConfidence && weakerVelocity && insideTail && !isProtectedMelody) {
+      if ((clearlyWeak || notStronger) && !isProtectedMelody) {
         isGhost = true;
         break;
       }
@@ -598,12 +739,16 @@ export function fitNotesToRange(notes = [], lowestPitch = 36, highestPitch = 84)
 /* Public API                                                        */
 /* ---------------------------------------------------------------- */
 
-export function buildPlayableNotes(notes = [], levelOrOptions = "practice") {
+export function buildPlayableNotes(
+  notes = [],
+  levelOrOptions = "practice",
+  extraOptions = {}
+) {
   const base =
     typeof levelOrOptions === "string"
       ? SIMPLIFY_LEVELS[levelOrOptions] || PLAYABILITY_DEFAULTS
       : { ...PLAYABILITY_DEFAULTS, ...levelOrOptions };
-  const options = base;
+  const options = { ...base, ...extraOptions };
 
   const normalized = normalizeNotes(notes);
   const protectedIds = computeProtectedSkyline(normalized);
@@ -612,6 +757,7 @@ export function buildPlayableNotes(notes = [], levelOrOptions = "practice") {
     (note) => protectedIds.has(note.id) || !isDustNote(note, options)
   );
   working = applyConfidenceFloor(working, options, protectedIds);
+  working = applyKeyConformity(working, options, protectedIds);
   working = removeSustainedHarmonicGhosts(working, options, protectedIds);
 
   const clusters = clusterByOnset(working, options.onsetClusterWindowSeconds);

@@ -17,7 +17,6 @@ from app.scripts.qwen_three_candidate_smoke import (
     _load_selected_candidates,
 )
 
-
 PITCH_CLASS_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
 
@@ -184,8 +183,7 @@ def run_qwen_pitch_correction_chunks(
                     "status": "completed",
                     "candidate_count": len(chunk_candidates),
                     "candidate_ids": [
-                        _compact_candidate(item)["candidate_id"]
-                        for item in chunk_candidates
+                        _compact_candidate(item)["candidate_id"] for item in chunk_candidates
                     ],
                     "validated": chunk_result["validated"],
                     "locked": chunk_result["locked"],
@@ -204,8 +202,7 @@ def run_qwen_pitch_correction_chunks(
                     "status": "error",
                     "candidate_count": len(chunk_candidates),
                     "candidate_ids": [
-                        _compact_candidate(item)["candidate_id"]
-                        for item in chunk_candidates
+                        _compact_candidate(item)["candidate_id"] for item in chunk_candidates
                     ],
                     "validated": None,
                     "locked": None,
@@ -214,15 +211,9 @@ def run_qwen_pitch_correction_chunks(
                 }
             )
 
-    expected_candidate_ids = [
-        _compact_candidate(item)["candidate_id"]
-        for item in candidates
-    ]
+    expected_candidate_ids = [_compact_candidate(item)["candidate_id"] for item in candidates]
 
-    locked_candidate_ids = [
-        item["candidate_id"]
-        for item in merged_locked_corrections
-    ]
+    locked_candidate_ids = [item["candidate_id"] for item in merged_locked_corrections]
 
     missing_candidate_ids = [
         candidate_id
@@ -271,12 +262,8 @@ def run_qwen_pitch_correction_chunks(
         "candidate_count": len(candidates),
         "chunk_size": chunk_size,
         "chunk_count": len(candidate_chunks),
-        "completed_chunk_count": sum(
-            1 for item in chunk_results if item["status"] == "completed"
-        ),
-        "failed_chunk_count": sum(
-            1 for item in chunk_results if item["status"] == "error"
-        ),
+        "completed_chunk_count": sum(1 for item in chunk_results if item["status"] == "completed"),
+        "failed_chunk_count": sum(1 for item in chunk_results if item["status"] == "error"),
         "coverage": {
             "ok": coverage_ok,
             "expected_candidate_count": len(expected_candidate_ids),
@@ -316,7 +303,9 @@ def run_qwen_pitch_correction_chunks(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run Qwen pitch correction on selected candidates in chunks.")
+    parser = argparse.ArgumentParser(
+        description="Run Qwen pitch correction on selected candidates in chunks."
+    )
     parser.add_argument("--base-url", default="http://host.docker.internal:11434")
     parser.add_argument("--model", default="qwen3:8b")
     parser.add_argument("--mask-path", required=True)

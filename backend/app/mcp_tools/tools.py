@@ -1,25 +1,26 @@
-from app.db import get_correction_run as db_get_correction_run
-from app.db import list_correction_runs as db_list_correction_runs
 from typing import Any
 
-from app.mcp_tools.base import MCPTool
-from app.mcp_tools.schemas import ToolCategory, ToolContract, ToolResult, ToolStatus
-from app.pipeline.audio_ingestion import extract_audio
-from app.pipeline.source_separation import separate_sources
-from app.pipeline.transcription import transcribe_audio
-from app.pipeline.orchestrator import run_audio_to_analysis_pipeline
-from app.pipeline.persistence import persist_audio_to_analysis_result
-from app.pipeline.correction_mask import build_correction_mask
-from app.pipeline.harmony_analysis import analyze_notes_harmony, merge_hvs_into_notes
-from app.pipeline.correction_proposals import build_correction_proposals_from_mask
-from app.pipeline.correction_validation import validate_correction_proposals
+from app.db import get_correction_run as db_get_correction_run
+from app.db import list_correction_runs as db_list_correction_runs
 from app.db.database import (
     get_metrics_for_run,
     get_pipeline_run,
     list_metrics,
     list_pipeline_runs,
 )
+from app.mcp_tools.base import MCPTool
+from app.mcp_tools.coach_tool import PracticeCoachTool
+from app.mcp_tools.schemas import ToolCategory, ToolContract, ToolResult, ToolStatus
+from app.pipeline.audio_ingestion import extract_audio
+from app.pipeline.correction_mask import build_correction_mask
+from app.pipeline.correction_proposals import build_correction_proposals_from_mask
+from app.pipeline.correction_validation import validate_correction_proposals
+from app.pipeline.harmony_analysis import analyze_notes_harmony, merge_hvs_into_notes
+from app.pipeline.orchestrator import run_audio_to_analysis_pipeline
+from app.pipeline.persistence import persist_audio_to_analysis_result
+from app.pipeline.source_separation import separate_sources
 from app.pipeline.tracer import run_tracer_bullet
+from app.pipeline.transcription import transcribe_audio
 
 
 class TranscribeAudioTool(MCPTool):
@@ -624,12 +625,6 @@ class RunTracerBulletTool(MCPTool):
             )
 
 
-
-
-
-
-
-
 class AnalyzeHarmonyTool(MCPTool):
     def __init__(self) -> None:
         self._contract = ToolContract(
@@ -869,9 +864,6 @@ class AnalyzeHarmonyTool(MCPTool):
             )
 
 
-
-
-
 class ValidateCorrectionsTool(MCPTool):
     def __init__(self) -> None:
         self._contract = ToolContract(
@@ -993,9 +985,7 @@ class ValidateCorrectionsTool(MCPTool):
             max_response_validations = max(0, min(max_response_validations, 1000))
 
             response_validations = (
-                full_data["validations"][:max_response_validations]
-                if include_validations
-                else []
+                full_data["validations"][:max_response_validations] if include_validations else []
             )
 
             data = {
@@ -1042,6 +1032,7 @@ class ValidateCorrectionsTool(MCPTool):
                 },
                 error=message,
             )
+
 
 class CorrectMidiTool(MCPTool):
     def __init__(self) -> None:
@@ -1169,9 +1160,7 @@ class CorrectMidiTool(MCPTool):
             max_response_proposals = max(0, min(max_response_proposals, 1000))
 
             response_proposals = (
-                full_data["proposals"][:max_response_proposals]
-                if include_proposals
-                else []
+                full_data["proposals"][:max_response_proposals] if include_proposals else []
             )
 
             data = {
@@ -1218,6 +1207,7 @@ class CorrectMidiTool(MCPTool):
                 },
                 error=message,
             )
+
 
 class GenerateMaskTool(MCPTool):
     def __init__(self) -> None:
@@ -1380,9 +1370,7 @@ class GenerateMaskTool(MCPTool):
 
                 harmony_notes = harmony_data.get("notes") or []
                 hvs_by_id = {
-                    note.get("id"): note
-                    for note in harmony_notes
-                    if note.get("id") is not None
+                    note.get("id"): note for note in harmony_notes if note.get("id") is not None
                 }
 
                 merged_notes = []
@@ -1394,7 +1382,9 @@ class GenerateMaskTool(MCPTool):
                     if harmony_note is not None:
                         item["hvs_score"] = harmony_note.get("hvs_score")
                         item["hvs_label"] = harmony_note.get("hvs_label")
-                        item["hvs_reason"] = harmony_note.get("hvs_reason") or harmony_note.get("reason")
+                        item["hvs_reason"] = harmony_note.get("hvs_reason") or harmony_note.get(
+                            "reason"
+                        )
 
                     merged_notes.append(item)
 
@@ -1421,11 +1411,7 @@ class GenerateMaskTool(MCPTool):
 
             max_candidates = max(0, min(max_candidates, 1000))
 
-            response_candidates = (
-                all_candidates[:max_candidates]
-                if include_candidates
-                else []
-            )
+            response_candidates = all_candidates[:max_candidates] if include_candidates else []
 
             full_data = {
                 "job_id": job_id,
@@ -1491,6 +1477,7 @@ class GenerateMaskTool(MCPTool):
                 },
                 error=message,
             )
+
 
 class ListPipelineRunsTool(MCPTool):
     def __init__(self) -> None:
@@ -1639,7 +1626,6 @@ class GetPipelineRunTool(MCPTool):
                 data={"run": None},
                 error=f"{type(exc).__name__}: {exc}",
             )
-
 
 
 class ListMetricsTool(MCPTool):
@@ -1808,7 +1794,6 @@ class GetMetricsForRunTool(MCPTool):
             )
 
 
-
 class ListCorrectionRunsTool(MCPTool):
     def __init__(self) -> None:
         self._contract = ToolContract(
@@ -1892,7 +1877,6 @@ class ListCorrectionRunsTool(MCPTool):
                 },
                 error=message,
             )
-
 
 
 class GetCorrectionRunTool(MCPTool):
@@ -2041,6 +2025,7 @@ class GetCorrectionRunTool(MCPTool):
                 error=message,
             )
 
+
 def build_default_tools() -> list[MCPTool]:
     return [
         ExtractAudioTool(),
@@ -2050,7 +2035,12 @@ def build_default_tools() -> list[MCPTool]:
         GenerateMaskTool(),
         CorrectMidiTool(),
         ValidateCorrectionsTool(),
-        StubTool("prepare_lesson", "Generate a learner-friendly lesson plan from the validated MIDI.", ToolCategory.LESSON, uses_gpu=True),
+        StubTool(
+            "prepare_lesson",
+            "Generate a learner-friendly lesson plan from the validated MIDI.",
+            ToolCategory.LESSON,
+            uses_gpu=True,
+        ),
         RunTracerBulletTool(),
         RunAudioToAnalysisTool(),
         ListPipelineRunsTool(),
@@ -2059,5 +2049,12 @@ def build_default_tools() -> list[MCPTool]:
         GetMetricsForRunTool(),
         ListCorrectionRunsTool(),
         GetCorrectionRunTool(),
-        StubTool("separate_lass", "Language-queried audio source separation using AudioSep or a compatible LASS model.", ToolCategory.AUDIO, uses_gpu=True, status=ToolStatus.EXPERIMENTAL),
+        StubTool(
+            "separate_lass",
+            "Language-queried audio source separation using AudioSep or a compatible LASS model.",
+            ToolCategory.AUDIO,
+            uses_gpu=True,
+            status=ToolStatus.EXPERIMENTAL,
+        ),
+        PracticeCoachTool(),
     ]

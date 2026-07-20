@@ -6,7 +6,6 @@ import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-
 DEFAULT_DEMUCS_MODEL = "htdemucs"
 DEFAULT_SELECTED_STEM = "other"
 
@@ -60,9 +59,7 @@ def _find_demucs_track_dir(
     if candidates:
         return sorted(candidates)[0]
 
-    raise FileNotFoundError(
-        f"Could not find Demucs output stems under: {demucs_output_dir}"
-    )
+    raise FileNotFoundError(f"Could not find Demucs output stems under: {demucs_output_dir}")
 
 
 def _collect_stems(track_dir: Path) -> dict[str, str]:

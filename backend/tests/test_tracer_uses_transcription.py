@@ -7,8 +7,8 @@ import pretty_midi
 import soundfile as sf
 
 from app.pipeline.models import TracerBulletResult
-from app.pipeline.transcription import TranscriptionResult
 from app.pipeline.tracer import run_tracer_bullet
+from app.pipeline.transcription import TranscriptionResult
 
 
 def _write_demo_wav(path: Path) -> None:

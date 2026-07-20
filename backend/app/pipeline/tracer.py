@@ -4,7 +4,6 @@ import json
 import shutil
 import uuid
 from pathlib import Path
-from typing import Optional
 
 import pretty_midi
 from music21 import converter
@@ -48,7 +47,7 @@ def _create_placeholder_midi(output_path: Path) -> Path:
     return output_path
 
 
-def _try_basic_pitch(audio_path: Path, job_dir: Path) -> tuple[Optional[Path], Optional[str]]:
+def _try_basic_pitch(audio_path: Path, job_dir: Path) -> tuple[Path | None, str | None]:
     """
     Try to run Basic Pitch.
 
@@ -77,9 +76,7 @@ def _try_basic_pitch(audio_path: Path, job_dir: Path) -> tuple[Optional[Path], O
             model_or_model_path=ICASSP_2022_MODEL_PATH,
         )
 
-        midi_candidates = sorted(
-            list(raw_dir.glob("*.mid")) + list(raw_dir.glob("*.midi"))
-        )
+        midi_candidates = sorted(list(raw_dir.glob("*.mid")) + list(raw_dir.glob("*.midi")))
 
         if not midi_candidates:
             return None, "Basic Pitch finished but did not create a MIDI file."
@@ -98,7 +95,7 @@ def _try_basic_pitch(audio_path: Path, job_dir: Path) -> tuple[Optional[Path], O
         return None, f"{type(exc).__name__}: {exc}"
 
 
-def detect_key_from_midi(midi_path: Path) -> tuple[str, Optional[float]]:
+def detect_key_from_midi(midi_path: Path) -> tuple[str, float | None]:
     """
     Detect musical key from a MIDI file using music21.
     """
@@ -117,7 +114,7 @@ def detect_key_from_midi(midi_path: Path) -> tuple[str, Optional[float]]:
 def run_tracer_bullet(
     audio_path: str | Path,
     artifacts_dir: str | Path = "artifacts/tracer",
-    job_id: Optional[str] = None,
+    job_id: str | None = None,
     use_basic_pitch: bool = False,
 ) -> TracerBulletResult:
     """

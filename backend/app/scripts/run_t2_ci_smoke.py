@@ -91,7 +91,9 @@ def main() -> int:
         results.append(data)
 
     report = {
-        "status": "completed" if all(item["status"] == "completed" for item in results) else "error",
+        "status": (
+            "completed" if all(item["status"] == "completed" for item in results) else "error"
+        ),
         "count": len(results),
         "results": results,
     }

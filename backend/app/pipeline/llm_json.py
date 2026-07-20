@@ -42,6 +42,4 @@ def require_json_fields(data: dict[str, Any], required_fields: list[str]) -> Non
     missing = [field for field in required_fields if field not in data]
 
     if missing:
-        raise LLMJsonExtractionError(
-            "Missing required JSON fields: " + ", ".join(missing)
-        )
+        raise LLMJsonExtractionError("Missing required JSON fields: " + ", ".join(missing))

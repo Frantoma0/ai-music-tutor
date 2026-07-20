@@ -56,7 +56,6 @@ def lock_correction_batch_metadata(
                 "candidate_id": correction.candidate_id,
                 "action": correction.action,
                 "reason": correction.reason,
-
                 # System-owned original metadata.
                 "original_pitch": candidate.get("pitch"),
                 "pitch_name": candidate.get("pitch_name"),
@@ -65,12 +64,10 @@ def lock_correction_batch_metadata(
                 "confidence": candidate.get("confidence"),
                 "hvs_score": candidate.get("hvs_score"),
                 "mask_reason": candidate.get("reason"),
-
                 # LLM-owned proposed fields.
                 "proposed_pitch": correction.proposed_pitch,
                 "proposed_start": correction.proposed_start,
                 "proposed_end": correction.proposed_end,
-
                 # Traceability.
                 "metadata_source": "system_candidate_locked",
                 "llm_metadata_ignored": True,

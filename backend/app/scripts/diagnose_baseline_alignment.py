@@ -3,9 +3,9 @@ import json
 import statistics
 from pathlib import Path
 
+import mir_eval
 import numpy as np
 import pretty_midi
-import mir_eval
 
 
 def load_notes(midi_path: str) -> tuple[np.ndarray, np.ndarray]:
@@ -24,9 +24,7 @@ def load_notes(midi_path: str) -> tuple[np.ndarray, np.ndarray]:
     if not onsets:
         return np.zeros((0, 2), dtype=float), np.zeros((0,), dtype=int)
 
-    intervals = np.column_stack(
-        [np.array(onsets, dtype=float), np.array(offsets, dtype=float)]
-    )
+    intervals = np.column_stack([np.array(onsets, dtype=float), np.array(offsets, dtype=float)])
     midi = np.array(pitches, dtype=int)
     order = np.argsort(intervals[:, 0])
 
@@ -260,9 +258,7 @@ def rank_suspects(report: dict, jump_threshold: float) -> list[dict[str, object]
 
     ref_span = report["reference_stats"]["span"]
     est_span = report["est_stats"]["span"]
-    onset_gap = abs(
-        report["reference_stats"]["first_onset"] - report["est_stats"]["first_onset"]
-    )
+    onset_gap = abs(report["reference_stats"]["first_onset"] - report["est_stats"]["first_onset"])
 
     if ref_span > 0 and est_span > 0:
         span_ratio = max(ref_span, est_span) / max(min(ref_span, est_span), 1e-6)
@@ -376,9 +372,7 @@ def print_report(report: dict) -> None:
 
     for suspect in report["suspects"]:
         print(
-            f"- {suspect['suspect']}  "
-            f"(+{suspect['f1_gain']:.4f} F1)  "
-            f"{suspect['detail']}"
+            f"- {suspect['suspect']}  " f"(+{suspect['f1_gain']:.4f} F1)  " f"{suspect['detail']}"
         )
 
     print("=" * 72)

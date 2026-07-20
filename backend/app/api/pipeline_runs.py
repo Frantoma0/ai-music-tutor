@@ -1,15 +1,16 @@
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 from app.db import DEFAULT_DB_PATH, delete_pipeline_run_by_job_id, set_pipeline_run_thumbnail_url
 
-from pydantic import BaseModel
-
 router = APIRouter(prefix="/api/pipeline-runs", tags=["pipeline-runs"])
+
 
 class PipelineRunThumbnailUpdate(BaseModel):
     thumbnail_url: str | None = None
+
 
 @router.delete("/{job_id}")
 async def delete_pipeline_run(
@@ -28,6 +29,7 @@ async def delete_pipeline_run(
         "status": "deleted",
         "job_id": job_id,
     }
+
 
 @router.patch("/{job_id}/thumbnail")
 async def update_pipeline_run_thumbnail(

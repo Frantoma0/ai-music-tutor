@@ -11,7 +11,6 @@ from app.pipeline.correction_mask import build_correction_mask
 from app.pipeline.harmony_analysis import analyze_notes_harmony, merge_hvs_into_notes
 from app.pipeline.lesson_schema import LessonMeta, LessonNote, LessonResponse, LessonVersions
 
-
 NOTE_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
 

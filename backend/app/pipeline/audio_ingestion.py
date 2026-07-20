@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import json
 import shutil
-import sys
 import subprocess
 import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from urllib.parse import urlparse
-
 
 MAX_FILE_SIZE_MB = 50
 MAX_DURATION_SECONDS = 10 * 60
@@ -92,15 +90,11 @@ def _validate_local_file(path: Path) -> None:
 
     size_mb = path.stat().st_size / (1024 * 1024)
     if size_mb > MAX_FILE_SIZE_MB:
-        raise ValueError(
-            f"Input file is too large: {size_mb:.2f} MB > {MAX_FILE_SIZE_MB} MB"
-        )
+        raise ValueError(f"Input file is too large: {size_mb:.2f} MB > {MAX_FILE_SIZE_MB} MB")
 
     duration, _, _ = _probe_audio(path)
     if duration is not None and duration > MAX_DURATION_SECONDS:
-        raise ValueError(
-            f"Input audio is too long: {duration:.2f}s > {MAX_DURATION_SECONDS}s"
-        )
+        raise ValueError(f"Input audio is too long: {duration:.2f}s > {MAX_DURATION_SECONDS}s")
 
 
 def _download_with_ytdlp(source_url: str, output_dir: Path) -> Path:
@@ -156,9 +150,7 @@ def _download_with_ytdlp(source_url: str, output_dir: Path) -> Path:
     if candidates:
         return candidates[0]
 
-    raise FileNotFoundError(
-        "yt-dlp completed successfully but no downloaded.* file was found."
-    )
+    raise FileNotFoundError("yt-dlp completed successfully but no downloaded.* file was found.")
 
 
 def _normalize_to_wav(input_path: Path, wav_path: Path) -> None:

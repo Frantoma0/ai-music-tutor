@@ -1,16 +1,16 @@
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 
-class ToolStatus(str, Enum):
+class ToolStatus(StrEnum):
     READY = "ready"
     DISABLED = "disabled"
     EXPERIMENTAL = "experimental"
 
 
-class ToolCategory(str, Enum):
+class ToolCategory(StrEnum):
     INGESTION = "ingestion"
     AUDIO = "audio"
     TRANSCRIPTION = "transcription"

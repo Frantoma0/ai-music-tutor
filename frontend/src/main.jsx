@@ -10,7 +10,7 @@ import HandsControl from "./components/HandsControl.jsx";
 import { PianoKeyboard } from "./components/PianoKeyboard";
 import { WaterfallCanvas } from "./components/WaterfallCanvas";
 import SheetView from "./components/SheetView.jsx";
-import { buildPlayableNotes, getPlayabilityStats, fitNotesToRange } from "./lib/playability";
+import { buildPlayableNotes, fitNotesToRange, parseKeySignature } from "./lib/playability";
 import { createMicPitchDetector } from "./lib/pitchDetection";
 import {
   UI_THEMES,
@@ -31,7 +31,6 @@ import {
   fetchLesson,
   fetchPipelineRuns,
   updatePipelineRunThumbnail,
-  isGeneratedYouTubeTitle,
   makeJobIdFromTitle,
   mapLessonNotesToUiNotes,
   runAudioToAnalysis,
@@ -149,6 +148,7 @@ const UI_COPY = {
     "notes.hintBeginner": "Beginner: melody + simple bass only",
     "notes.hidden": "artifacts hidden",
     "settings.piano": "My piano",
+    "settings.pianoModel": "Choose a model (optional)",
     "settings.pianoSize": "Keyboard size",
     "settings.pianoFrom": "From",
     "settings.pianoTo": "To",
@@ -300,6 +300,7 @@ const UI_COPY = {
     "notes.hintBeginner": "Начинаещ: само мелодия + прост бас",
     "notes.hidden": "скрити артефакта",
     "settings.piano": "Моето пиано",
+    "settings.pianoModel": "Избери модел (по избор)",
     "settings.pianoSize": "Размер на клавиатурата",
     "settings.pianoFrom": "От",
     "settings.pianoTo": "До",
@@ -724,6 +725,28 @@ function formatPlaybackTime(seconds = 0) {
 
 
 
+/*
+ * Common keyboard models with their factory key ranges.
+ * Sources: manufacturer spec sheets (Casio SA-76: 44 keys F2-C6;
+ * Yamaha 76-key portables: E1-G7; 61-key portables: C2-C7;
+ * 49-key controllers: C3-C7; full pianos: A0-C8).
+ */
+const KEYBOARD_MODELS = [
+  { id: "acoustic", label: "Acoustic piano", keys: 88, low: 21, high: 108 },
+  { id: "yamaha-p45", label: "Yamaha P-45 / P-125", keys: 88, low: 21, high: 108 },
+  { id: "casio-cdp", label: "Casio CDP-S110 / PX-770", keys: 88, low: 21, high: 108 },
+  { id: "roland-fp", label: "Roland FP-10 / FP-30X", keys: 88, low: 21, high: 108 },
+  { id: "kawai-es", label: "Kawai ES120", keys: 88, low: 21, high: 108 },
+  { id: "yamaha-ew310", label: "Yamaha PSR-EW310 / EW425", keys: 76, low: 28, high: 103 },
+  { id: "casio-wk", label: "Casio WK-6600", keys: 76, low: 28, high: 103 },
+  { id: "yamaha-e373", label: "Yamaha PSR-E373 / E473", keys: 61, low: 36, high: 96 },
+  { id: "casio-cts", label: "Casio CT-S300 / CT-X700", keys: 61, low: 36, high: 96 },
+  { id: "korg-ek50", label: "Korg EK-50", keys: 61, low: 36, high: 96 },
+  { id: "keystation-49", label: "M-Audio Keystation 49 (MIDI)", keys: 49, low: 48, high: 96 },
+  { id: "casio-sa76", label: "Casio SA-76 / SA-81", keys: 44, low: 41, high: 84 },
+  { id: "casio-sa46", label: "Casio SA-46 / SA-50", keys: 32, low: 53, high: 84 },
+];
+
 const PIANO_RANGE_PRESETS = [
   { id: "88", label: "88", low: 21, high: 108 },
   { id: "76", label: "76", low: 28, high: 103 },
@@ -1017,18 +1040,20 @@ function App() {
       ? Math.min(100, Math.max(0, (musicalTime / lessonDuration) * 100))
       : 0;
 
+  const lessonKeyPitchClasses = React.useMemo(
+    () => parseKeySignature(lesson?.meta?.detected_key),
+    [lesson]
+  );
+
   const playableLessonNotes = React.useMemo(() => {
     if (noteViewMode === "raw") {
       return lessonNotes;
     }
 
-    return buildPlayableNotes(lessonNotes, noteViewMode);
-  }, [lessonNotes, noteViewMode]);
-
-  const playabilityStats = React.useMemo(
-    () => getPlayabilityStats(lessonNotes, playableLessonNotes),
-    [lessonNotes, playableLessonNotes]
-  );
+    return buildPlayableNotes(lessonNotes, noteViewMode, {
+      keyPitchClasses: lessonKeyPitchClasses,
+    });
+  }, [lessonNotes, noteViewMode, lessonKeyPitchClasses]);
 
   const rangedLessonNotes = React.useMemo(() => {
     if (!fitToRange) {
@@ -1061,20 +1086,6 @@ function App() {
       return note.hand === activeHand;
     });
   }, [confidenceFilteredNotes, activeHand]);
-
-  const noteViewHint =
-    noteViewMode === "raw"
-      ? t("notes.hintRaw")
-      : `${noteViewMode === "beginner" ? t("notes.hintBeginner") : t("notes.hintPractice")}${
-          playabilityStats.removedCount > 0
-            ? ` · ${playabilityStats.removedCount} ${t("notes.hidden")}`
-            : ""
-        }.`;
-
-  const progressPercent = Math.max(
-    0,
-    Math.min(100, Math.round((musicalTime / Math.max(lessonDurationSeconds, 0.01)) * 100))
-  );
 
   const reviewNoteCount = lessonNotes.filter(
     (note) => note.inCorrectionMask || note.in_correction_mask
@@ -1254,7 +1265,6 @@ function App() {
       baseUrl: "/samples/piano/",
       release: 1.4,
       onload: () => {
-        console.log("Acoustic piano samples loaded");
         synthRef.current = pianoSampler;
         fallbackSynth.dispose();
       },
@@ -3087,6 +3097,42 @@ return (
 
               <section className="settings-section">
                 <span className="settings-section-label">{t("settings.piano")}</span>
+
+                <select
+                  className="piano-model-select"
+                  value={
+                    KEYBOARD_MODELS.find(
+                      (model) =>
+                        model.low === pianoRange.low && model.high === pianoRange.high
+                    )?.id ?? ""
+                  }
+                  onChange={(event) => {
+                    const model = KEYBOARD_MODELS.find(
+                      (candidate) => candidate.id === event.target.value
+                    );
+
+                    if (model) {
+                      setPianoRange({ low: model.low, high: model.high });
+                    }
+                  }}
+                >
+                  <option value="">{t("settings.pianoModel")}</option>
+
+                  {[88, 76, 61, 49, 44, 32].map((keyCount) => (
+                    <optgroup
+                      key={keyCount}
+                      label={`${keyCount} ${t("settings.pianoKeys")}`}
+                    >
+                      {KEYBOARD_MODELS.filter(
+                        (model) => model.keys === keyCount
+                      ).map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.label} · {midiNoteLabel(model.low)}–{midiNoteLabel(model.high)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
 
                 <div className="piano-range-presets">
                   {PIANO_RANGE_PRESETS.map((preset) => (

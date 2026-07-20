@@ -37,13 +37,15 @@ def main() -> int:
                     offset_ratio=offset_ratio,
                 )
 
-                run_results.append({
-                    "index": index,
-                    "job_id": job_id,
-                    "composer": row["canonical_composer"],
-                    "title": row["canonical_title"],
-                    **metrics,
-                })
+                run_results.append(
+                    {
+                        "index": index,
+                        "job_id": job_id,
+                        "composer": row["canonical_composer"],
+                        "title": row["canonical_title"],
+                        **metrics,
+                    }
+                )
 
             completed = [item for item in run_results if item["status"] == "completed"]
 
@@ -51,10 +53,16 @@ def main() -> int:
                 "onset_tolerance": onset_tolerance,
                 "offset_ratio": offset_ratio,
                 "completed_count": len(completed),
-                "average_precision": round(sum(item["precision"] for item in completed) / len(completed), 6),
-                "average_recall": round(sum(item["recall"] for item in completed) / len(completed), 6),
+                "average_precision": round(
+                    sum(item["precision"] for item in completed) / len(completed), 6
+                ),
+                "average_recall": round(
+                    sum(item["recall"] for item in completed) / len(completed), 6
+                ),
                 "average_f1": round(sum(item["f1"] for item in completed) / len(completed), 6),
-                "average_overlap": round(sum(item["overlap"] for item in completed) / len(completed), 6),
+                "average_overlap": round(
+                    sum(item["overlap"] for item in completed) / len(completed), 6
+                ),
                 "results": run_results,
             }
 
@@ -70,21 +78,27 @@ def main() -> int:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    print(json.dumps({
-        "status": report["status"],
-        "output": str(output_path),
-        "summary": [
+    print(
+        json.dumps(
             {
-                "onset_tolerance": item["onset_tolerance"],
-                "offset_ratio": item["offset_ratio"],
-                "average_f1": item["average_f1"],
-                "average_precision": item["average_precision"],
-                "average_recall": item["average_recall"],
-                "average_overlap": item["average_overlap"],
-            }
-            for item in results
-        ],
-    }, indent=2, ensure_ascii=False))
+                "status": report["status"],
+                "output": str(output_path),
+                "summary": [
+                    {
+                        "onset_tolerance": item["onset_tolerance"],
+                        "offset_ratio": item["offset_ratio"],
+                        "average_f1": item["average_f1"],
+                        "average_precision": item["average_precision"],
+                        "average_recall": item["average_recall"],
+                        "average_overlap": item["average_overlap"],
+                    }
+                    for item in results
+                ],
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
 
     return 0
 

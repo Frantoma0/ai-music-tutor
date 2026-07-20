@@ -5,7 +5,6 @@ from pathlib import Path
 import pretty_midi
 from music21 import pitch
 
-
 _MAJOR_SCALE_INTERVALS = {0, 2, 4, 5, 7, 9, 11}
 _MINOR_SCALE_INTERVALS = {0, 2, 3, 5, 7, 8, 10}
 
